@@ -198,7 +198,7 @@
             1
           ],
           "details": "Configure bucket permissions and ensure seamless file transfer from the upload service to storage.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 3,
@@ -208,7 +208,7 @@
             2
           ],
           "details": "Configure Unstructured.io to handle various document formats and extract structured data.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 4,

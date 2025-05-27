@@ -17,13 +17,13 @@ Test file upload, storage, and processing pipeline. Validate status tracking and
 ### Details:
 Ensure the service can handle large files and various formats, and validate file types and sizes.
 
-## 2. Storage Integration with Encore Bucket [pending]
+## 2. Storage Integration with Encore Bucket [done]
 ### Dependencies: 4.1
 ### Description: Integrate the file upload service with Encore Bucket for secure and scalable storage.
 ### Details:
 Configure bucket permissions and ensure seamless file transfer from the upload service to storage.
 
-## 3. Document Parsing with Unstructured.io [pending]
+## 3. Document Parsing with Unstructured.io [done]
 ### Dependencies: 4.2
 ### Description: Use Unstructured.io to parse documents stored in Encore Bucket and extract relevant data.
 ### Details:

@@ -6,8 +6,7 @@ import { db } from "../db/connection";
 import { documents } from "../db/schema";
 import { eq } from "drizzle-orm";
 
-// Import database connection and types
-const databaseUrl = secret("DATABASE_URL");
+// Database connection (secret is handled by db/connection.ts)
 
 // Validation schemas
 export const FileUploadSchema = z.object({
@@ -135,16 +134,14 @@ export async function saveFileToDatabase(
   await db.insert(documents).values({
     id: documentId,
     userId: 'system', // TODO: Get from authentication when implemented
-    title: metadata?.title || fileName,
-    fileName,
+    filename: bucketPath,
+    originalName: fileName,
     contentType,
     fileSize,
-    bucketPath,
     status: 'uploaded',
     uploadedAt: now,
-    updatedAt: now,
     chunkCount: 0,
-    metadata: metadata ? JSON.stringify(metadata) : null,
+    metadata: metadata || {},
   });
 }
 
@@ -242,5 +239,4 @@ export const getUploadStatus = api(
   }
 );
 
-// Export types for use in other modules
-export type { FileUploadRequest, FileUploadResponse, FileValidationError };
+// Re-export types for use in other modules
