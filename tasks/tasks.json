@@ -1,0 +1,831 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Setup Project Repository and Core Infrastructure",
+      "description": "Initialize project repository with core infrastructure for backend (EncoreTS), frontend (Next.js), and CI/CD pipelines.",
+      "details": "Create monorepo or separate repos for backend and frontend. Set up EncoreTS for backend services, Next.js with Shadcn UI and Tailwind CSS for frontend. Configure CI/CD for automated testing and deployment. Initialize linting, formatting, and commit hooks. Set up local, preview, and production environments.",
+      "testStrategy": "Verify repository structure, CI/CD pipeline, and environment setup. Run initial linting and formatting checks.",
+      "priority": "high",
+      "dependencies": [],
+      "status": "done",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Repository Structure Creation",
+          "description": "Design and create the foundational directory structure for the monorepo, including separate folders for backend, frontend, shared resources, and configuration files.",
+          "dependencies": [],
+          "details": "Establish a clear and scalable folder hierarchy to support both EncoreTS backend and Next.js frontend. Include placeholders for CI/CD and environment configuration files.",
+          "status": "done"
+        },
+        {
+          "id": 2,
+          "title": "Backend EncoreTS Configuration",
+          "description": "Initialize the EncoreTS backend, define core services, and set up API endpoints using Encore's conventions.",
+          "dependencies": [
+            1
+          ],
+          "details": "Use the Encore CLI to scaffold the backend, create service folders with `encore.service.ts`, and define initial API endpoints. Ensure type-safe resource definitions and prepare for future expansion.",
+          "status": "done"
+        },
+        {
+          "id": 3,
+          "title": "Frontend Next.js Setup with UI Components",
+          "description": "Set up the Next.js frontend application and establish a reusable UI component library.",
+          "dependencies": [
+            1
+          ],
+          "details": "Initialize a Next.js project in the designated frontend folder. Create a basic page structure and implement a shared UI components directory for consistent design.",
+          "status": "done"
+        },
+        {
+          "id": 4,
+          "title": "CI/CD Pipeline Configuration",
+          "description": "Configure automated build, test, and deployment pipelines for both backend and frontend using a CI/CD tool (e.g., GitHub Actions).",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Set up workflows to lint, test, and deploy both EncoreTS and Next.js apps. Ensure pipelines are modular and support multi-environment deployments.",
+          "status": "done"
+        },
+        {
+          "id": 5,
+          "title": "Environment Configuration for All Deployment Stages",
+          "description": "Establish environment variable management and configuration files for development, staging, and production.",
+          "dependencies": [
+            4
+          ],
+          "details": "Create and document `.env` files or use a secrets manager for each environment. Ensure both backend and frontend can securely access required configuration values.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Define Database Schema and ORM Setup",
+      "description": "Design and implement NeonDB (PostgreSQL) schema with PGVector extension and configure Drizzle ORM.",
+      "details": "Define tables: documents, document_chunks, conversations, conversation_messages. Set up PGVector for vector storage with HNSW indexing. Configure Drizzle ORM for CRUD operations. Implement migrations and seeding scripts.",
+      "testStrategy": "Test schema creation, migrations, and basic CRUD operations. Validate vector storage and indexing.",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "done",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Schema Design for All Required Tables",
+          "description": "Design the database schema by defining all necessary tables, columns, data types, relationships, and constraints based on application requirements. Ensure normalization, minimize redundancy, and optimize for query patterns.",
+          "dependencies": [],
+          "details": "Consider best practices such as using at least third normal form, establishing naming conventions, and including appropriate constraints. Document the schema structure and rationale for design choices.",
+          "status": "done"
+        },
+        {
+          "id": 2,
+          "title": "PGVector Extension Configuration for Vector Storage",
+          "description": "Install and configure the PGVector extension in PostgreSQL to enable efficient storage and querying of vector data types required for AI or similarity search features.",
+          "dependencies": [
+            1
+          ],
+          "details": "Ensure the extension is enabled in the database, and update the schema to include vector columns where needed. Document configuration steps and any required permissions or settings.",
+          "status": "done"
+        },
+        {
+          "id": 3,
+          "title": "Drizzle ORM Integration and Model Definition",
+          "description": "Integrate Drizzle ORM into the application and define models that accurately represent the database schema, including support for vector fields and relationships.",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Map all tables and columns to ORM models, ensuring type safety and alignment with the schema. Implement any necessary custom types or adapters for vector fields.",
+          "status": "done"
+        },
+        {
+          "id": 4,
+          "title": "Migration and Seeding Script Implementation",
+          "description": "Develop migration scripts to create and update the database schema, and implement seeding scripts to populate the database with initial or test data.",
+          "dependencies": [
+            1,
+            2,
+            3
+          ],
+          "details": "Ensure migrations handle vector columns and constraints. Seeding scripts should use Drizzle ORM models and cover all required tables for development and testing.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Implement User Authentication and Access Control",
+      "description": "Develop authentication middleware and access control logic for all endpoints.",
+      "details": "Integrate authentication provider (e.g., OAuth2, JWT). Implement user-scoped access to conversations and documents. Enforce HTTPS, input sanitization, and least privilege access. Store API keys via Encore secrets.",
+      "testStrategy": "Test authentication flow, access control, and secret management. Validate input sanitization and HTTPS enforcement.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2
+      ],
+      "status": "in-progress",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Authentication Provider Integration",
+          "description": "Integrate a secure authentication provider (such as OAuth, SAML, or OpenID Connect) into the application to handle user identity verification and login flows.",
+          "dependencies": [],
+          "details": "Select an appropriate authentication provider based on system requirements. Implement the necessary SDKs or APIs, configure callback URLs, and ensure secure handling of authentication tokens.",
+          "status": "in-progress"
+        },
+        {
+          "id": 2,
+          "title": "User-Scoped Access Control Implementation",
+          "description": "Implement user-scoped access control to ensure that authenticated users can only access resources and actions permitted by their roles or permissions.",
+          "dependencies": [
+            1
+          ],
+          "details": "Define user roles and permissions. Enforce access control checks at the API and service layers, ensuring that each request is authorized based on the authenticated user's scope.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Security Hardening (HTTPS, Input Sanitization)",
+          "description": "Apply security best practices such as enforcing HTTPS for all communications and sanitizing all user inputs to prevent common vulnerabilities.",
+          "dependencies": [
+            1
+          ],
+          "details": "Configure HTTPS using valid certificates. Implement input validation and sanitization routines to protect against injection attacks and other input-based vulnerabilities.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "API Key and Secrets Management",
+          "description": "Establish secure management of API keys and secrets, including storage, rotation, and access policies.",
+          "dependencies": [
+            1
+          ],
+          "details": "Use a secrets management solution (such as AWS Secrets Manager or HashiCorp Vault) to securely store and manage API keys and sensitive credentials. Implement access controls and regular rotation policies.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Build Document Upload and Processing Service",
+      "description": "Implement UploadService and DocProcessingService for document ingestion and processing.",
+      "details": "Handle multipart form data for PDF, DOCX, TXT uploads (up to 50MB). Store raw files in Encore Bucket. Orchestrate Mastra AI workflow for parsing (Unstructured.io), semantic chunking, and embedding (Cohere embed-v4.0). Track processing status (queued → processing → processed → error).",
+      "testStrategy": "Test file upload, storage, and processing pipeline. Validate status tracking and error handling.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "File Upload and Validation Service",
+          "description": "Develop a service to handle file uploads and validate their integrity and format.",
+          "dependencies": [],
+          "details": "Ensure the service can handle large files and various formats, and validate file types and sizes.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Storage Integration with Encore Bucket",
+          "description": "Integrate the file upload service with Encore Bucket for secure and scalable storage.",
+          "dependencies": [
+            1
+          ],
+          "details": "Configure bucket permissions and ensure seamless file transfer from the upload service to storage.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Document Parsing with Unstructured.io",
+          "description": "Use Unstructured.io to parse documents stored in Encore Bucket and extract relevant data.",
+          "dependencies": [
+            2
+          ],
+          "details": "Configure Unstructured.io to handle various document formats and extract structured data.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Semantic Chunking and Embedding with Cohere",
+          "description": "Apply semantic chunking and embedding using Cohere to analyze parsed document data.",
+          "dependencies": [
+            3
+          ],
+          "details": "Utilize Cohere's AI capabilities to create meaningful semantic chunks and embeddings from extracted data.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Processing Status Tracking and Error Handling",
+          "description": "Implement a system to track the processing status of documents and handle errors gracefully.",
+          "dependencies": [
+            4
+          ],
+          "details": "Develop a dashboard or API to monitor processing status and implement robust error handling mechanisms.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Implement Document Management Service",
+      "description": "Develop DocMgmtService for CRUD operations on documents and metadata.",
+      "details": "Support CRUD for documents with metadata (author, tags, department, access level). Allow viewing, organizing, and deleting documents. Integrate with object storage for file management.",
+      "testStrategy": "Test document CRUD, metadata handling, and file management. Validate access control and error handling.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement CRUD Operations for Documents and Metadata",
+          "description": "Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning, access control, and audit trails.",
+          "dependencies": [],
+          "details": "This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning and security features as described in standard DMS architectures.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop Document Organization and Filtering Functionality",
+          "description": "Create features for organizing documents (e.g., folders, tags, categories) and implement robust filtering and search capabilities based on metadata and content.",
+          "dependencies": [
+            1
+          ],
+          "details": "This involves building indexing mechanisms, search APIs, and user interfaces for sorting and filtering documents, leveraging metadata captured during CRUD operations.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Integrate Object Storage for File Management",
+          "description": "Connect the document management system to an object storage service for storing and retrieving document files, ensuring scalability and secure access.",
+          "dependencies": [
+            1
+          ],
+          "details": "This includes implementing file upload/download logic, managing storage references in the metadata, and handling storage-specific concerns such as redundancy and access permissions.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Build Search and Retrieval Service",
+      "description": "Implement SearchService for hybrid search (vector + FTS) with reranking.",
+      "details": "Integrate PGVector for vector similarity, NeonDB for full-text search, and Cohere Rerank v3.0 for relevance optimization. Support filtering by metadata, date ranges, and access levels. Retrieve adjacent chunks for context expansion.",
+      "testStrategy": "Test hybrid search, reranking, and filtering. Validate context expansion and performance.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Vector Similarity Search with PGVector",
+          "description": "Set up and configure the pgvector extension in PostgreSQL to enable storage, indexing, and querying of vector embeddings for similarity search.",
+          "dependencies": [],
+          "details": "Install the pgvector extension, create tables with vector columns, and implement similarity search queries using appropriate distance metrics (e.g., cosine similarity, Euclidean distance). Ensure efficient indexing (e.g., HNSW, IVFFlat) for performance.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Integrate Full-Text Search with NeonDB",
+          "description": "Enable and configure full-text search capabilities in NeonDB to support keyword-based retrieval alongside vector search.",
+          "dependencies": [
+            1
+          ],
+          "details": "Set up full-text search indexes and queries in NeonDB. Ensure that text data is properly tokenized and indexed for efficient retrieval. Integrate with existing data models to support hybrid search scenarios.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement Reranking with Cohere",
+          "description": "Integrate Cohere's reranking API to reorder hybrid search results based on semantic relevance.",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "After retrieving initial results from both vector and full-text search, send the combined results to Cohere's reranking endpoint. Use the returned ranking to present the most relevant results to the user.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Develop Context Expansion and Filtering Capabilities",
+          "description": "Add support for context expansion (e.g., retrieving related documents or metadata) and advanced filtering (e.g., by attributes or facets) to refine search results.",
+          "dependencies": [
+            3
+          ],
+          "details": "Implement logic to expand search context based on user queries or result metadata. Add filtering options to allow users to narrow results by specific fields, tags, or other criteria. Ensure these features work seamlessly with the hybrid search and reranking pipeline.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Develop LLM Service and Structured Prompting",
+      "description": "Implement LLMService as a Gemini API wrapper with structured prompting.",
+      "details": "Wrap Google Gemini 2.5 Flash API. Implement structured prompts for RAG responses. Handle citation parsing and follow-up generation.",
+      "testStrategy": "Test LLM API integration, prompt engineering, and citation parsing. Validate follow-up question generation.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Gemini API Integration and Wrapper Implementation",
+          "description": "Implement a Python wrapper for the Gemini API to handle authentication, request formatting, and response parsing",
+          "dependencies": [],
+          "details": "Set up REST API integration with proper authentication using API keys. Implement compatibility with OpenAI libraries by updating endpoint URLs and request formats. Create a wrapper class that handles both direct Gemini API calls and OpenAI-compatible interfaces. Test with basic prompts to ensure proper connectivity and response handling.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Structured Prompt Engineering for RAG Responses",
+          "description": "Design and implement structured prompts optimized for retrieval-augmented generation (RAG) workflows",
+          "dependencies": [
+            1
+          ],
+          "details": "Create prompt templates with proper formatting for RAG contexts. Implement structured output parsing using BaseModel classes to ensure consistent response formats. Design function calling capabilities to enable tool use within the RAG workflow. Test prompt effectiveness with various document types and query patterns.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Citation Parsing and Follow-up Generation Logic",
+          "description": "Develop logic to extract citations from LLM responses and generate appropriate follow-up queries",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Implement regex patterns to identify and extract citations from text responses. Create a citation validation system to verify source accuracy. Design follow-up query generation based on citation context and user intent. Build a feedback loop mechanism to improve citation quality over time through model fine-tuning.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Build Chat Service and RAG Agent Orchestration",
+      "description": "Develop ChatService for conversation management and RAG agent orchestration.",
+      "details": "Manage chat conversations (create, resume, auto-save drafts). Orchestrate RAG agent for contextual, cited responses. Support history pruning and intelligent context management.",
+      "testStrategy": "Test conversation management, RAG orchestration, and context management. Validate auto-save and history pruning.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Conversation Management (Creation and Resumption)",
+          "description": "Design and implement mechanisms for creating new conversations and resuming existing ones, ensuring proper state persistence and retrieval.",
+          "dependencies": [],
+          "details": "Define conversation data models, endpoints for creation and resumption, and ensure conversations are uniquely identifiable and retrievable.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "RAG Agent Orchestration for Contextual Responses",
+          "description": "Integrate and orchestrate Retrieval-Augmented Generation (RAG) agents to provide contextual responses within conversations, managing the flow between search, retrieval, and LLM components.",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement workflow to retrieve relevant context, invoke LLMs, and maintain conversation state across agent interactions.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Draft Auto-Save Functionality",
+          "description": "Implement auto-save for message drafts within conversations, ensuring users do not lose progress and can resume unfinished messages.",
+          "dependencies": [
+            1
+          ],
+          "details": "Design draft storage, trigger auto-save events, and provide retrieval endpoints for draft restoration.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "History Pruning and Context Management",
+          "description": "Develop mechanisms to prune conversation history and manage context windows, optimizing performance and ensuring relevant context is maintained for RAG workflows.",
+          "dependencies": [
+            2
+          ],
+          "details": "Implement logic for history truncation, context window management, and efficient retrieval of relevant past messages.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Implement Caching Layer",
+      "description": "Set up multi-level caching (in-memory + Redis) for embeddings and frequent queries.",
+      "details": "Integrate Redis and in-memory caching for embeddings and search results. Monitor and optimize cache hit rate (target >80%).",
+      "testStrategy": "Test caching integration, hit rate, and invalidation. Validate performance impact.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "In-memory Caching Configuration",
+          "description": "Set up and configure an in-memory (local) cache layer (L1 cache) within the application to store frequently accessed data for fast retrieval.",
+          "dependencies": [],
+          "details": "Define cache size, eviction policies (e.g., LRU), and data serialization methods. Ensure thread safety and minimal latency for cache access. Integrate cache invalidation mechanisms to prevent stale data.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Redis Integration for Distributed Caching",
+          "description": "Integrate Redis as a distributed (L2) cache to provide high availability and scalability across multiple application instances.",
+          "dependencies": [
+            1
+          ],
+          "details": "Configure Redis connection settings, data serialization, and cache key strategies. Implement logic for cache reads/writes: check L1 cache first, then L2 (Redis), and finally the database if needed. Ensure cache consistency and implement cache invalidation/update strategies across both layers.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Cache Monitoring and Optimization for Target Hit Rates",
+          "description": "Implement monitoring and analytics for both cache layers to track hit/miss rates and optimize cache configuration for desired performance.",
+          "dependencies": [
+            2
+          ],
+          "details": "Set up metrics collection (e.g., using Prometheus, Grafana, or Redis monitoring tools) to observe cache usage patterns. Analyze hit/miss rates, identify bottlenecks, and adjust cache sizes, eviction policies, or data partitioning to achieve target hit rates. Regularly review and refine cache invalidation strategies to minimize stale data.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Develop Frontend Chat Interface",
+      "description": "Build Next.js frontend with Shadcn UI for chat and document management.",
+      "details": "Implement chat interface with conversation management, document upload, and management views. Use Tanstack Query for data fetching. Support interactive citations with hover cards.",
+      "testStrategy": "Test UI components, data fetching, and interactive features. Validate responsive design and accessibility.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Chat Interface with Conversation Management",
+          "description": "Develop a responsive chat interface that supports conversation history, message threading, and real-time updates",
+          "dependencies": [],
+          "details": "Create UI components for message bubbles, input area, and conversation history. Implement state management for conversations with proper error handling. Ensure cyclomatic complexity remains under 10 by breaking down complex logic into smaller functions. Limit external dependencies to fewer than 10 libraries to maintain performance.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Build Document Upload and Management Views",
+          "description": "Create interfaces for document uploading, viewing, and organizing within the application",
+          "dependencies": [],
+          "details": "Develop drag-and-drop upload functionality, document preview components, and file organization system. Implement proper error handling for failed uploads and file type validation. Maintain code duplication below 5% by creating reusable components. Ensure 80% unit test coverage for critical upload and management functions.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement Data Fetching with Tanstack Query",
+          "description": "Set up efficient data fetching patterns using Tanstack Query for all API interactions",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Configure query client with proper caching strategies. Implement query hooks for chat data, document metadata, and user information. Create custom hooks for common data patterns to reduce complexity. Keep build time under 5 minutes by optimizing query configurations and implementing code splitting where appropriate.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Develop Interactive Citation Components with Hover Cards",
+          "description": "Create interactive citation elements that display additional information through hover cards",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Build hover card components with smooth animations and proper accessibility support. Implement citation linking between documents and chat messages. Ensure full documentation for all component props and functions. Optimize rendering performance to maintain responsive UI even with multiple hover cards active.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Implement Monitoring and Observability",
+      "description": "Set up custom metrics, structured logging, and error tracking.",
+      "details": "Instrument services for custom metrics (processing time, embedding time, RAG scores, LLM response time, cache hit rates). Implement structured logging and error reporting. Integrate with Encore dashboard for real-time monitoring.",
+      "testStrategy": "Test metric collection, logging, and dashboard integration. Validate error tracking and alerting.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Custom Metrics Instrumentation",
+          "description": "Add application-level metrics to all microservices using OpenTelemetry or Prometheus client libraries",
+          "dependencies": [],
+          "details": "Identify key performance indicators and business metrics for each service. Instrument code with counters, gauges, and histograms to track metrics like response times, error rates, and business-specific measurements. Focus on metrics that provide quantitative measurements of system health and can detect anomalies. Include metrics for latency of transactions, database connections, cache hit/miss ratios, and resource utilization.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Set Up Structured Logging and Error Reporting",
+          "description": "Implement consistent structured logging patterns across all services with contextual information",
+          "dependencies": [
+            1
+          ],
+          "details": "Design a standardized logging format that includes timestamps, service names, trace IDs, and severity levels. Ensure logs provide detailed context on events within the system, including errors, warnings, and informational messages. Configure log aggregation to a central location. Implement error reporting mechanisms that capture stack traces and relevant context. Ensure logs can be correlated with metrics for comprehensive troubleshooting.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Integrate Real-time Monitoring Dashboards",
+          "description": "Create comprehensive dashboards that visualize metrics and logs from all services",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Select and configure a dashboard solution compatible with your metrics and logging systems. Design dashboards that display key metrics, service health, and business KPIs. Set up alerts for critical thresholds. Create views for different stakeholders (developers, operations, business). Ensure dashboards provide real-time visibility into system performance and can help identify bottlenecks. Include visualizations for custom metrics that track specific values from services and systems.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Implement Comprehensive Testing Framework",
+      "description": "Set up unit, integration, and RAG evaluation tests with DeepEval.",
+      "details": "Configure Vitest for unit/integration tests. Integrate DeepEval for semantic similarity and LLM rubric testing. Enforce TDD for core components. Target >80% test coverage.",
+      "testStrategy": "Test test framework setup, coverage, and RAG evaluation. Validate TDD workflow.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Configure Vitest for Unit and Integration Testing",
+          "description": "Set up separate configurations for unit and integration tests using Vitest",
+          "dependencies": [],
+          "details": "Create vitest.config.unit.ts and vitest.config.integration.ts files. Configure unit tests to exclude integration test files. Set up workspace projects to separate test types. Add appropriate npm scripts for running each test type separately.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Implement RAG Evaluation Testing with DeepEval",
+          "description": "Set up DeepEval for testing and evaluating Retrieval-Augmented Generation components",
+          "dependencies": [],
+          "details": "Install DeepEval package. Create test fixtures and evaluation datasets. Implement metrics for measuring RAG quality (relevance, faithfulness, context precision). Configure test environment for RAG components.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Establish Test Coverage Monitoring and TDD Workflow",
+          "description": "Set up test coverage tools and implement Test-Driven Development practices",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Configure code coverage reporting in Vitest. Set up CI/CD pipeline for automated testing. Create documentation for TDD workflow. Implement pre-commit hooks to enforce test coverage thresholds. Set up dashboards for monitoring test metrics over time.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Implement Audit Trail and Compliance Features",
+      "description": "Develop comprehensive logging for compliance and audit trails.",
+      "details": "Log all critical operations (document upload, processing, chat interactions). Preserve context for audit purposes. Implement graceful error handling with user-friendly messages.",
+      "testStrategy": "Test audit logging, context preservation, and error handling. Validate compliance requirements.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Critical Operation Logging Across Services",
+          "description": "Establish consistent and comprehensive logging of critical operations across all relevant services. Ensure logs capture essential details such as timestamps, user activity, data modifications, access records, and system events, following best practices for security and compliance.",
+          "dependencies": [],
+          "details": "Define clear log policies, automate log collection where possible, and ensure logs are accurate, complete, and securely stored for audit purposes. Regularly review and maintain the integrity of logs.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Preserve Context for Audit Purposes",
+          "description": "Ensure that all logged events retain sufficient contextual information to support effective auditing and traceability. This includes capturing relevant metadata, user identifiers, and the sequence of actions leading to each event.",
+          "dependencies": [
+            1
+          ],
+          "details": "Design log structures and data flows to maintain context across distributed services, enabling auditors to reconstruct event histories and verify compliance with internal controls.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement User-Friendly Error Handling with Appropriate Messaging",
+          "description": "Develop error handling mechanisms that provide clear, actionable, and user-friendly messages while ensuring that errors are logged with sufficient detail for audit and troubleshooting purposes.",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Balance transparency for end users with security and privacy requirements. Ensure error logs do not expose sensitive information but still support effective incident response and compliance reviews.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Optimize Performance and Scalability",
+      "description": "Optimize system for performance and scalability targets.",
+      "details": "Implement multi-level caching, query optimization, and auto-scaling. Monitor and tune for <3s chat response, <5min document processing, and 100+ concurrent users.",
+      "testStrategy": "Test performance under load, response times, and scalability. Validate SLA compliance.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Multi-level Caching Implementation",
+          "description": "Design and implement a multi-level caching strategy to reduce database load and improve response times",
+          "dependencies": [],
+          "details": "Configure buffer pools and memory caches, optimize cache parameters based on traffic patterns, and implement distributed caching for high-traffic scenarios. Focus on efficient memory utilization and alignment with system requirements.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Query Optimization for Key Operations",
+          "description": "Analyze and optimize critical database queries to improve performance",
+          "dependencies": [],
+          "details": "Perform query plan analysis, implement proper indexing strategies, rewrite complex queries, and apply appropriate optimization techniques (cost-based, rule-based, or heuristic-based) based on query complexity. Focus on columns used in WHERE, JOIN, and ORDER BY clauses.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Auto-scaling Configuration",
+          "description": "Implement database sharding and partitioning with auto-scaling capabilities",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Design horizontal and vertical partitioning strategies, implement effective sharding for large databases, configure partition pruning, and set up auto-scaling rules based on performance metrics and traffic patterns.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Performance Testing and SLA Compliance",
+          "description": "Develop and execute comprehensive performance tests to ensure SLA compliance",
+          "dependencies": [
+            1,
+            2,
+            3
+          ],
+          "details": "Create test scenarios simulating high-traffic conditions, measure response times against SLA requirements, identify bottlenecks, tune database parameters, and implement monitoring solutions to track ongoing performance metrics.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Prepare for Deployment and Continuous Improvement",
+      "description": "Finalize deployment strategy and prepare for iterative enhancement.",
+      "details": "Configure environment-specific secrets and settings. Set up resource auto-scaling. Prepare for monitoring and alerting from day one. Plan for iterative feature enhancement and quality focus.",
+      "testStrategy": "Test deployment pipeline, environment configuration, and monitoring setup. Validate readiness for production.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Environment-specific Configuration and Secrets Management",
+          "description": "Set up and manage environment-specific configurations and securely handle secrets (such as API keys, database credentials, and environment variables) for all deployment environments (development, staging, production). Ensure secrets are not hardcoded and are stored using secure vaults or secret management tools.",
+          "dependencies": [],
+          "details": "This includes defining configuration files for each environment, integrating with secret management solutions, and validating that sensitive data is not exposed in code repositories.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Resource Auto-scaling Setup",
+          "description": "Configure auto-scaling for compute, storage, and other resources to ensure the application can handle varying loads efficiently. Set up scaling policies and thresholds based on key performance metrics.",
+          "dependencies": [
+            1
+          ],
+          "details": "This involves defining scaling rules, testing auto-scaling behavior under load, and ensuring that scaling events do not disrupt service availability.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Monitoring and Alerting Configuration for Production Readiness",
+          "description": "Implement comprehensive monitoring and alerting for all production systems. Define key metrics, set up dashboards, and configure actionable alerts to ensure rapid detection and response to incidents.",
+          "dependencies": [
+            2
+          ],
+          "details": "This includes integrating with monitoring tools, establishing alert thresholds, and ensuring on-call procedures are in place for incident response.",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

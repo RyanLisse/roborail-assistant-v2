@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres, { type Sql } from "postgres";
+import postgres from "postgres";
 import * as schema from "./schema";
 
 // Database connection configuration

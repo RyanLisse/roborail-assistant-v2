@@ -1,6 +1,6 @@
 # Task ID: 2
 # Title: Define Database Schema and ORM Setup
-# Status: in-progress
+# Status: done
 # Dependencies: 1
 # Priority: high
 # Description: Design and implement NeonDB (PostgreSQL) schema with PGVector extension and configure Drizzle ORM.
@@ -11,25 +11,25 @@ Define tables: documents, document_chunks, conversations, conversation_messages.
 Test schema creation, migrations, and basic CRUD operations. Validate vector storage and indexing.
 
 # Subtasks:
-## 1. Schema Design for All Required Tables [pending]
+## 1. Schema Design for All Required Tables [done]
 ### Dependencies: None
 ### Description: Design the database schema by defining all necessary tables, columns, data types, relationships, and constraints based on application requirements. Ensure normalization, minimize redundancy, and optimize for query patterns.
 ### Details:
 Consider best practices such as using at least third normal form, establishing naming conventions, and including appropriate constraints. Document the schema structure and rationale for design choices.
 
-## 2. PGVector Extension Configuration for Vector Storage [pending]
+## 2. PGVector Extension Configuration for Vector Storage [done]
 ### Dependencies: 2.1
 ### Description: Install and configure the PGVector extension in PostgreSQL to enable efficient storage and querying of vector data types required for AI or similarity search features.
 ### Details:
 Ensure the extension is enabled in the database, and update the schema to include vector columns where needed. Document configuration steps and any required permissions or settings.
 
-## 3. Drizzle ORM Integration and Model Definition [pending]
+## 3. Drizzle ORM Integration and Model Definition [done]
 ### Dependencies: 2.1, 2.2
 ### Description: Integrate Drizzle ORM into the application and define models that accurately represent the database schema, including support for vector fields and relationships.
 ### Details:
 Map all tables and columns to ORM models, ensuring type safety and alignment with the schema. Implement any necessary custom types or adapters for vector fields.
 
-## 4. Migration and Seeding Script Implementation [pending]
+## 4. Migration and Seeding Script Implementation [done]
 ### Dependencies: 2.1, 2.2, 2.3
 ### Description: Develop migration scripts to create and update the database schema, and implement seeding scripts to populate the database with initial or test data.
 ### Details:

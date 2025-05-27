@@ -58,5 +58,9 @@
     "url": "https://github.com/yourusername/roborail-assistant.git"
   },
   "keywords": ["rag", "chat", "ai", "typescript", "encore", "nextjs"],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "jsonwebtoken": "^9.0.2"
+  }
 }

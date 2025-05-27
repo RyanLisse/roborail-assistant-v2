@@ -27,11 +27,18 @@ A production-grade Retrieval Augmented Generation (RAG) chat application enablin
 ## Phase 2: Core Backend Foundation (Slices 1-3)
 
 ### Backend Infrastructure
-- [ ] **Slice 1**: Core Backend Foundation & DB Schema Setup
-  - [ ] EncoreTS project initialization
-  - [ ] NeonDB setup with PGVector extension
-  - [ ] Drizzle ORM configuration
-  - [ ] Mastra AI basic configuration
+- [x] **Task 1**: Infrastructure Setup & Project Structure ✅
+  - [x] EncoreTS backend + Next.js frontend monorepo
+  - [x] CI/CD pipeline with GitHub Actions  
+  - [x] Code quality tools (Biome.js) integration
+  - [x] Development environment fully operational
+- [x] **Task 2**: Database Schema and ORM Setup ✅
+  - [x] Comprehensive database schema with PGVector support
+  - [x] Drizzle ORM integration with type safety
+  - [x] Zod validation schemas for all entities  
+  - [x] Database utilities with CRUD operations
+  - [x] Unit tests for schema validation (13/13 passing)
+  - [x] Vector search capabilities for 1024-dim embeddings
 - [ ] **Slice 2**: Document Upload Endpoint & Processing Trigger
   - [ ] Multipart file upload endpoint
   - [ ] Encore bucket storage integration
