@@ -11,7 +11,7 @@ Integrate authentication provider (e.g., OAuth2, JWT). Implement user-scoped acc
 Test authentication flow, access control, and secret management. Validate input sanitization and HTTPS enforcement.
 
 # Subtasks:
-## 1. Authentication Provider Integration [in-progress]
+## 1. Authentication Provider Integration [done]
 ### Dependencies: None
 ### Description: Integrate a secure authentication provider (such as OAuth, SAML, or OpenID Connect) into the application to handle user identity verification and login flows.
 ### Details:

@@ -2,10 +2,20 @@
 node_modules/
 */node_modules/
 
-# Environment variables
+# Environment variables and secrets
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+.env.development
+*.pem
+*.key
+*.crt
+secrets.json
+config/secrets/
+jwt-secret
+auth-keys/
 
 # Build outputs
 dist/

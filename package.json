@@ -60,7 +60,9 @@
   "keywords": ["rag", "chat", "ai", "typescript", "encore", "nextjs"],
   "license": "MIT",
   "dependencies": {
+    "@types/express": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.9",
+    "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2"
   }
 }

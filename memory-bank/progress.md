@@ -39,6 +39,13 @@ A production-grade Retrieval Augmented Generation (RAG) chat application enablin
   - [x] Database utilities with CRUD operations
   - [x] Unit tests for schema validation (13/13 passing)
   - [x] Vector search capabilities for 1024-dim embeddings
+- [x] **Task 3.1**: Authentication Provider Integration ✅
+  - [x] JWT-based AuthProvider class with token generation/verification/refresh
+  - [x] Express middleware for route authentication
+  - [x] User-scoped access control helpers
+  - [x] Comprehensive error handling with custom AuthError class
+  - [x] Zod validation for token payload structure
+  - [x] Unit tests for authentication (13/13 passing)
 - [ ] **Slice 2**: Document Upload Endpoint & Processing Trigger
   - [ ] Multipart file upload endpoint
   - [ ] Encore bucket storage integration

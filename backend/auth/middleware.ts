@@ -1,5 +1,5 @@
-import type { Request, Response, NextFunction } from 'express';
-import { AuthProvider, AuthError, type TokenPayload, type UserData } from './auth-provider';
+import type { NextFunction, Request, Response } from "express";
+import { AuthError, AuthProvider, type TokenPayload, type UserData } from "./auth-provider";
 
 // Extend Express Request interface to include user
 declare global {
@@ -25,12 +25,12 @@ export async function authMiddleware(
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-      res.status(401).json({ error: 'Authorization header required' });
+      res.status(401).json({ error: "Authorization header required" });
       return;
     }
 
-    if (!authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Invalid authorization format' });
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Invalid authorization format" });
       return;
     }
 
@@ -44,26 +44,24 @@ export async function authMiddleware(
       if (error instanceof AuthError) {
         res.status(401).json({ error: error.message, code: error.code });
       } else {
-        res.status(401).json({ error: 'Authentication failed' });
+        res.status(401).json({ error: "Authentication failed" });
       }
     }
-  } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (_error) {
+    res.status(500).json({ error: "Internal server error" });
   }
 }
 
 /**
  * Decorator function to require authentication for route handlers
  */
-export function requireAuth<T extends (req: Request, res: Response) => void>(
-  handler: T
-): T {
+export function requireAuth<T extends (req: Request, res: Response) => void>(handler: T): T {
   return ((req: Request, res: Response) => {
     if (!req.user) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ error: "Authentication required" });
       return;
     }
-    
+
     handler(req, res);
   }) as T;
 }
@@ -74,7 +72,7 @@ export function requireAuth<T extends (req: Request, res: Response) => void>(
 export async function getUserFromToken(token: string): Promise<TokenPayload | null> {
   try {
     return await authProvider.verifyToken(token);
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
@@ -85,18 +83,18 @@ export async function getUserFromToken(token: string): Promise<TokenPayload | nu
  */
 export async function optionalAuthMiddleware(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): Promise<void> {
   const authHeader = req.headers.authorization;
 
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
-    
+
     try {
       const tokenPayload = await authProvider.verifyToken(token);
       req.user = tokenPayload;
-    } catch (error) {
+    } catch (_error) {
       // Don't fail for optional auth - just continue without user
     }
   }
@@ -107,32 +105,29 @@ export async function optionalAuthMiddleware(
 /**
  * Check if the current user owns the resource by comparing user IDs
  */
-export function checkResourceOwnership(
-  req: Request,
-  resourceUserId: string
-): boolean {
+export function checkResourceOwnership(req: Request, resourceUserId: string): boolean {
   return req.user?.userId === resourceUserId;
 }
 
 /**
  * Middleware to ensure user can only access their own resources
  */
-export function enforceUserScope(userIdField: string = 'userId') {
+export function enforceUserScope(userIdField = "userId") {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ error: "Authentication required" });
       return;
     }
 
     const resourceUserId = req.params[userIdField] || req.body[userIdField];
-    
+
     if (!resourceUserId) {
       res.status(400).json({ error: `${userIdField} parameter required` });
       return;
     }
 
     if (req.user.userId !== resourceUserId) {
-      res.status(403).json({ error: 'Access denied: insufficient permissions' });
+      res.status(403).json({ error: "Access denied: insufficient permissions" });
       return;
     }
 

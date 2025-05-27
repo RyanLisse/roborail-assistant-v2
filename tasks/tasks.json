@@ -135,7 +135,7 @@
           "description": "Integrate a secure authentication provider (such as OAuth, SAML, or OpenID Connect) into the application to handle user identity verification and login flows.",
           "dependencies": [],
           "details": "Select an appropriate authentication provider based on system requirements. Implement the necessary SDKs or APIs, configure callback URLs, and ensure secure handling of authentication tokens.",
-          "status": "in-progress"
+          "status": "done"
         },
         {
           "id": 2,

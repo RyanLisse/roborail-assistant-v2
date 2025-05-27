@@ -1,6 +1,6 @@
 /**
  * Authentication module for the RoboRail Assistant
- * 
+ *
  * This module provides JWT-based authentication with:
  * - Token generation and verification
  * - Express middleware for route protection
@@ -14,7 +14,7 @@ export {
   TokenPayloadSchema,
   type TokenPayload,
   type UserData,
-} from './auth-provider';
+} from "./auth-provider";
 
 export {
   authMiddleware,
@@ -23,7 +23,7 @@ export {
   getUserFromToken,
   checkResourceOwnership,
   enforceUserScope,
-} from './middleware';
+} from "./middleware";
 
 // Re-export common types for convenience
-export type { Request, Response, NextFunction } from 'express';
+export type { Request, Response, NextFunction } from "express";
