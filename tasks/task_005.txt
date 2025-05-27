@@ -1,6 +1,6 @@
 # Task ID: 5
 # Title: Implement Document Management Service
-# Status: in-progress
+# Status: done
 # Dependencies: 1, 2, 4
 # Priority: medium
 # Description: Develop DocMgmtService for CRUD operations on documents and metadata.
@@ -17,13 +17,13 @@ Test document CRUD, metadata handling, and file management. Validate error handl
 ### Details:
 This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning features as described in standard DMS architectures.
 
-## 2. Develop Document Organization and Filtering Functionality [in-progress]
+## 2. Develop Document Organization and Filtering Functionality [done]
 ### Dependencies: 5.1
 ### Description: Create features for organizing documents (e.g., folders, tags, categories) and implement robust filtering and search capabilities based on metadata and content.
 ### Details:
 This involves building indexing mechanisms, search APIs, and user interfaces for sorting and filtering documents, leveraging metadata captured during CRUD operations.
 
-## 3. Integrate Object Storage for File Management [pending]
+## 3. Integrate Object Storage for File Management [done]
 ### Dependencies: 5.1
 ### Description: Connect the document management system to an object storage service for storing and retrieving document files, ensuring scalability and secure access.
 ### Details:

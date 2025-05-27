@@ -236,7 +236,7 @@
       "id": 5,
       "title": "Implement Document Management Service",
       "description": "Develop DocMgmtService for CRUD operations on documents and metadata.",
-      "status": "in-progress",
+      "status": "done",
       "dependencies": [
         1,
         2,
@@ -262,7 +262,7 @@
             1
           ],
           "details": "This involves building indexing mechanisms, search APIs, and user interfaces for sorting and filtering documents, leveraging metadata captured during CRUD operations.",
-          "status": "in-progress"
+          "status": "done"
         },
         {
           "id": 3,
@@ -272,7 +272,7 @@
             1
           ],
           "details": "This includes implementing file upload/download logic, managing storage references in the metadata, and handling storage-specific concerns such as redundancy.",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
@@ -280,7 +280,7 @@
       "id": 6,
       "title": "Build Search and Retrieval Service",
       "description": "Implement SearchService for hybrid search (vector + FTS) with reranking.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         1,
         2,
@@ -297,7 +297,7 @@
           "description": "Set up and configure the pgvector extension in PostgreSQL to enable storage, indexing, and querying of vector embeddings for similarity search.",
           "dependencies": [],
           "details": "Install the pgvector extension, create tables with vector columns, and implement similarity search queries using appropriate distance metrics (e.g., cosine similarity, Euclidean distance). Ensure efficient indexing (e.g., HNSW, IVFFlat) for performance.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 2,
@@ -307,7 +307,7 @@
             1
           ],
           "details": "Set up full-text search indexes and queries in NeonDB. Ensure that text data is properly tokenized and indexed for efficient retrieval. Integrate with existing data models to support hybrid search scenarios.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 3,
@@ -318,7 +318,7 @@
             2
           ],
           "details": "After retrieving initial results from both vector and full-text search, send the combined results to Cohere's reranking endpoint. Use the returned ranking to present the most relevant results to the user.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 4,
@@ -328,7 +328,7 @@
             3
           ],
           "details": "Implement logic to expand search context based on user queries or result metadata. Add filtering options to allow users to narrow results by specific fields, tags, or other criteria. Ensure these features work seamlessly with the hybrid search and reranking pipeline.",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
