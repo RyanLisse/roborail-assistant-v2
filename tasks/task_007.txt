@@ -1,0 +1,31 @@
+# Task ID: 7
+# Title: Develop LLM Service and Structured Prompting
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5, 6
+# Priority: high
+# Description: Implement LLMService as a Gemini API wrapper with structured prompting.
+# Details:
+Wrap Google Gemini 2.5 Flash API. Implement structured prompts for RAG responses. Handle citation parsing and follow-up generation.
+
+# Test Strategy:
+Test LLM API integration, prompt engineering, and citation parsing. Validate follow-up question generation.
+
+# Subtasks:
+## 1. Gemini API Integration and Wrapper Implementation [pending]
+### Dependencies: None
+### Description: Implement a Python wrapper for the Gemini API to handle authentication, request formatting, and response parsing
+### Details:
+Set up REST API integration with proper authentication using API keys. Implement compatibility with OpenAI libraries by updating endpoint URLs and request formats. Create a wrapper class that handles both direct Gemini API calls and OpenAI-compatible interfaces. Test with basic prompts to ensure proper connectivity and response handling.
+
+## 2. Structured Prompt Engineering for RAG Responses [pending]
+### Dependencies: 7.1
+### Description: Design and implement structured prompts optimized for retrieval-augmented generation (RAG) workflows
+### Details:
+Create prompt templates with proper formatting for RAG contexts. Implement structured output parsing using BaseModel classes to ensure consistent response formats. Design function calling capabilities to enable tool use within the RAG workflow. Test prompt effectiveness with various document types and query patterns.
+
+## 3. Citation Parsing and Follow-up Generation Logic [pending]
+### Dependencies: 7.1, 7.2
+### Description: Develop logic to extract citations from LLM responses and generate appropriate follow-up queries
+### Details:
+Implement regex patterns to identify and extract citations from text responses. Create a citation validation system to verify source accuracy. Design follow-up query generation based on citation context and user intent. Build a feedback loop mechanism to improve citation quality over time through model fine-tuning.
+

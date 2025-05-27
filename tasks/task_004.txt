@@ -1,0 +1,43 @@
+# Task ID: 4
+# Title: Build Document Upload and Processing Service
+# Status: pending
+# Dependencies: 1, 2, 3
+# Priority: high
+# Description: Implement UploadService and DocProcessingService for document ingestion and processing.
+# Details:
+Handle multipart form data for PDF, DOCX, TXT uploads (up to 50MB). Store raw files in Encore Bucket. Orchestrate Mastra AI workflow for parsing (Unstructured.io), semantic chunking, and embedding (Cohere embed-v4.0). Track processing status (queued → processing → processed → error).
+
+# Test Strategy:
+Test file upload, storage, and processing pipeline. Validate status tracking and error handling.
+
+# Subtasks:
+## 1. File Upload and Validation Service [pending]
+### Dependencies: None
+### Description: Develop a service to handle file uploads and validate their integrity and format.
+### Details:
+Ensure the service can handle large files and various formats, and validate file types and sizes.
+
+## 2. Storage Integration with Encore Bucket [pending]
+### Dependencies: 4.1
+### Description: Integrate the file upload service with Encore Bucket for secure and scalable storage.
+### Details:
+Configure bucket permissions and ensure seamless file transfer from the upload service to storage.
+
+## 3. Document Parsing with Unstructured.io [pending]
+### Dependencies: 4.2
+### Description: Use Unstructured.io to parse documents stored in Encore Bucket and extract relevant data.
+### Details:
+Configure Unstructured.io to handle various document formats and extract structured data.
+
+## 4. Semantic Chunking and Embedding with Cohere [pending]
+### Dependencies: 4.3
+### Description: Apply semantic chunking and embedding using Cohere to analyze parsed document data.
+### Details:
+Utilize Cohere's AI capabilities to create meaningful semantic chunks and embeddings from extracted data.
+
+## 5. Processing Status Tracking and Error Handling [pending]
+### Dependencies: 4.4
+### Description: Implement a system to track the processing status of documents and handle errors gracefully.
+### Details:
+Develop a dashboard or API to monitor processing status and implement robust error handling mechanisms.
+

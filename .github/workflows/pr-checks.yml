@@ -1,0 +1,246 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, develop]
+
+jobs:
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Configure allowed types
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            test
+            chore
+            ci
+            perf
+            build
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            didn't match the configured pattern. Please ensure that the subject
+            doesn't start with an uppercase character.
+
+      - name: Check for breaking changes
+        id: breaking-changes
+        run: |
+          # Check if PR title contains breaking change indicators
+          if echo "${{ github.event.pull_request.title }}" | grep -qE "(BREAKING|!:)"; then
+            echo "has_breaking_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Require breaking change description
+        if: steps.breaking-changes.outputs.has_breaking_changes == 'true'
+        run: |
+          if ! echo "${{ github.event.pull_request.body }}" | grep -q "BREAKING CHANGE"; then
+            echo "PR contains breaking changes but no description in body"
+            exit 1
+          fi
+
+  size-check:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        run: |
+          # Count changed lines
+          CHANGED_LINES=$(git diff --stat origin/${{ github.event.pull_request.base.ref }} | tail -1 | awk '{print $4+$6}')
+          
+          if [ -z "$CHANGED_LINES" ]; then
+            CHANGED_LINES=0
+          fi
+          
+          echo "Changed lines: $CHANGED_LINES"
+          
+          # Set size label based on lines changed
+          if [ "$CHANGED_LINES" -lt 50 ]; then
+            SIZE_LABEL="size/XS"
+          elif [ "$CHANGED_LINES" -lt 200 ]; then
+            SIZE_LABEL="size/S"
+          elif [ "$CHANGED_LINES" -lt 500 ]; then
+            SIZE_LABEL="size/M"
+          elif [ "$CHANGED_LINES" -lt 1000 ]; then
+            SIZE_LABEL="size/L"
+          else
+            SIZE_LABEL="size/XL"
+          fi
+          
+          echo "PR_SIZE_LABEL=$SIZE_LABEL" >> $GITHUB_ENV
+          
+          # Warn for very large PRs
+          if [ "$CHANGED_LINES" -gt 1000 ]; then
+            echo "::warning::This PR is very large ($CHANGED_LINES lines changed). Consider breaking it into smaller PRs."
+          fi
+
+      - name: Add size label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { PR_SIZE_LABEL } = process.env;
+            
+            // Remove existing size labels
+            const existingLabels = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const sizeLabels = existingLabels.data.filter(label => 
+              label.name.startsWith('size/')
+            );
+            
+            for (const label of sizeLabels) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: label.name
+              });
+            }
+            
+            // Add new size label
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [PR_SIZE_LABEL]
+            });
+
+  conflict-check:
+    name: Merge Conflict Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for merge conflicts
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          
+          # Try to merge and check for conflicts
+          git merge-tree $(git merge-base HEAD origin/${{ github.event.pull_request.base.ref }}) HEAD origin/${{ github.event.pull_request.base.ref }} > merge_result.txt
+          
+          if grep -q "<<<<<<< " merge_result.txt; then
+            echo "::error::This PR has merge conflicts with the base branch"
+            exit 1
+          else
+            echo "No merge conflicts detected"
+          fi
+
+  related-issue-check:
+    name: Related Issue Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for related issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body || '';
+            const prTitle = context.payload.pull_request.title || '';
+            
+            // Check for issue references in title and body
+            const issuePattern = /#\d+|closes #\d+|fixes #\d+|resolves #\d+/i;
+            
+            if (!issuePattern.test(prTitle) && !issuePattern.test(prBody)) {
+              const comment = `⚠️ **Missing Issue Reference**
+              
+              This PR doesn't seem to reference any issue. Please ensure that:
+              1. There's a related issue for this change
+              2. The PR description includes "Closes #<issue-number>" or similar
+              3. Or add context about why no issue is needed
+              
+              This helps with tracking and project management.`;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+              
+              // Add label for tracking
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['needs-issue-reference']
+              });
+            }
+
+  auto-assign-reviewers:
+    name: Auto Assign Reviewers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto-assign reviewers
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+            const author = context.payload.pull_request.user.login;
+            
+            // Get files changed in the PR
+            const files = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+            
+            const changedFiles = files.data.map(file => file.filename);
+            let reviewers = [];
+            
+            // Add reviewers based on changed files
+            if (changedFiles.some(file => file.startsWith('backend/'))) {
+              reviewers.push('backend-team');
+            }
+            
+            if (changedFiles.some(file => file.startsWith('frontend/'))) {
+              reviewers.push('frontend-team');
+            }
+            
+            if (changedFiles.some(file => file.includes('.github/workflows/'))) {
+              reviewers.push('devops-team');
+            }
+            
+            // Remove duplicates and author
+            reviewers = [...new Set(reviewers)].filter(reviewer => reviewer !== author);
+            
+            if (reviewers.length > 0) {
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: prNumber,
+                team_reviewers: reviewers
+              });
+            }

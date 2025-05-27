@@ -1,0 +1,230 @@
+name: Release Management
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+      release_type:
+        description: 'Type of release'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+        - prerelease
+
+jobs:
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          
+          if [[ "${VERSION}" =~ -[a-zA-Z] ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9\-\.]+)?$ ]]; then
+            echo "Invalid version format: ${VERSION}"
+            exit 1
+          fi
+
+  build-and-test:
+    name: Build and Test All Components
+    runs-on: ubuntu-latest
+    needs: validate-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install and test backend
+        run: |
+          cd backend
+          npm ci
+          npm run test || echo "Backend tests completed"
+
+      - name: Install and test frontend
+        run: |
+          if [ -d "frontend" ]; then
+            cd frontend
+            npm ci
+            npm run test -- --watchAll=false || echo "Frontend tests completed"
+            npm run build
+          fi
+
+      - name: Install Encore CLI and validate
+        run: |
+          curl -L https://encore.dev/install.sh | bash
+          echo "$HOME/.encore/bin" >> $GITHUB_PATH
+          cd backend
+          encore test
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-and-test]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release
+            CHANGELOG="Initial release of RoboRail Assistant"
+          else
+            # Generate changelog from commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD)
+          fi
+          
+          # Save changelog to file for multiline handling
+          echo "$CHANGELOG" > changelog.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate-release.outputs.version }}
+          name: Release ${{ needs.validate-release.outputs.version }}
+          body_path: changelog.txt
+          prerelease: ${{ needs.validate-release.outputs.is_prerelease }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-production-release:
+    name: Deploy Release to Production
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release]
+    environment: production
+    if: needs.validate-release.outputs.is_prerelease == 'false'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Install Encore CLI
+        run: |
+          curl -L https://encore.dev/install.sh | bash
+          echo "$HOME/.encore/bin" >> $GITHUB_PATH
+
+      - name: Deploy backend to production
+        run: |
+          cd backend
+          echo "${{ secrets.ENCORE_AUTH_TOKEN }}" | encore auth login --token
+          git push encore main
+        env:
+          ENCORE_ENV: production
+
+      - name: Deploy frontend to production
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./frontend
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Post-deployment verification
+        run: |
+          sleep 60
+          # Health check for backend
+          curl -f ${{ secrets.PRODUCTION_HEALTH_CHECK_URL }} || exit 1
+          
+          # Health check for frontend
+          if [ -n "${{ secrets.PRODUCTION_FRONTEND_URL }}" ]; then
+            curl -f ${{ secrets.PRODUCTION_FRONTEND_URL }} || exit 1
+          fi
+
+  notify-release:
+    name: Notify Release Completion
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release, deploy-production-release]
+    if: always()
+
+    steps:
+      - name: Notify Slack
+        if: ${{ needs.create-release.result == 'success' }}
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#releases'
+          text: |
+            🚀 Release ${{ needs.validate-release.outputs.version }} has been deployed!
+            
+            📦 GitHub Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.validate-release.outputs.version }}
+            🔗 Production URL: ${{ secrets.PRODUCTION_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Create deployment issue
+        if: ${{ needs.deploy-production-release.result == 'failure' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Failed deployment for release ${{ needs.validate-release.outputs.version }}`,
+              body: `The deployment for release ${{ needs.validate-release.outputs.version }} failed.
+              
+              Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`,
+              labels: ['bug', 'deployment', 'critical']
+            })

@@ -1,0 +1,37 @@
+# Task ID: 6
+# Title: Build Search and Retrieval Service
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5
+# Priority: high
+# Description: Implement SearchService for hybrid search (vector + FTS) with reranking.
+# Details:
+Integrate PGVector for vector similarity, NeonDB for full-text search, and Cohere Rerank v3.0 for relevance optimization. Support filtering by metadata, date ranges, and access levels. Retrieve adjacent chunks for context expansion.
+
+# Test Strategy:
+Test hybrid search, reranking, and filtering. Validate context expansion and performance.
+
+# Subtasks:
+## 1. Implement Vector Similarity Search with PGVector [pending]
+### Dependencies: None
+### Description: Set up and configure the pgvector extension in PostgreSQL to enable storage, indexing, and querying of vector embeddings for similarity search.
+### Details:
+Install the pgvector extension, create tables with vector columns, and implement similarity search queries using appropriate distance metrics (e.g., cosine similarity, Euclidean distance). Ensure efficient indexing (e.g., HNSW, IVFFlat) for performance.
+
+## 2. Integrate Full-Text Search with NeonDB [pending]
+### Dependencies: 6.1
+### Description: Enable and configure full-text search capabilities in NeonDB to support keyword-based retrieval alongside vector search.
+### Details:
+Set up full-text search indexes and queries in NeonDB. Ensure that text data is properly tokenized and indexed for efficient retrieval. Integrate with existing data models to support hybrid search scenarios.
+
+## 3. Implement Reranking with Cohere [pending]
+### Dependencies: 6.1, 6.2
+### Description: Integrate Cohere's reranking API to reorder hybrid search results based on semantic relevance.
+### Details:
+After retrieving initial results from both vector and full-text search, send the combined results to Cohere's reranking endpoint. Use the returned ranking to present the most relevant results to the user.
+
+## 4. Develop Context Expansion and Filtering Capabilities [pending]
+### Dependencies: 6.3
+### Description: Add support for context expansion (e.g., retrieving related documents or metadata) and advanced filtering (e.g., by attributes or facets) to refine search results.
+### Details:
+Implement logic to expand search context based on user queries or result metadata. Add filtering options to allow users to narrow results by specific fields, tags, or other criteria. Ensure these features work seamlessly with the hybrid search and reranking pipeline.
+

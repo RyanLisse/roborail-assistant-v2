@@ -1,0 +1,30 @@
+{
+  "name": "encore-ts-starter",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Encore Typescript Starter",
+  "license": "MPL-2.0",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "22.15.21",
+    "drizzle-kit": "^0.31.1",
+    "typescript": "5.8.3"
+  },
+  "scripts": {
+    "dev": "encore run",
+    "build": "encore build",
+    "test": "bun test",
+    "type-check": "tsc --noEmit",
+    "lint": "echo 'Backend linting not configured yet'",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.43.1",
+    "encore.dev": "^1.47.3",
+    "postgres": "^3.4.7",
+    "zod": "^3.25.30"
+  }
+}
