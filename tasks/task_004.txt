@@ -1,6 +1,6 @@
 # Task ID: 4
 # Title: Build Document Upload and Processing Service
-# Status: in-progress
+# Status: done
 # Dependencies: 1, 2
 # Priority: high
 # Description: Implement UploadService and DocProcessingService for document ingestion and processing.
@@ -29,13 +29,13 @@ Configure bucket permissions and ensure seamless file transfer from the upload s
 ### Details:
 Configure Unstructured.io to handle various document formats and extract structured data.
 
-## 4. Semantic Chunking and Embedding with Cohere [in-progress]
+## 4. Semantic Chunking and Embedding with Cohere [done]
 ### Dependencies: 4.3
 ### Description: Apply semantic chunking and embedding using Cohere to analyze parsed document data.
 ### Details:
 Utilize Cohere's AI capabilities to create meaningful semantic chunks and embeddings from extracted data.
 
-## 5. Processing Status Tracking and Error Handling [pending]
+## 5. Processing Status Tracking and Error Handling [done]
 ### Dependencies: 4.4
 ### Description: Implement a system to track the processing status of documents and handle errors gracefully.
 ### Details:

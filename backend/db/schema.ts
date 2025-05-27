@@ -13,6 +13,8 @@ import { z } from "zod";
 // Zod schemas for validation
 export const DocumentStatus = z.enum(["uploaded", "processing", "processed", "failed"]);
 export const MessageRole = z.enum(["user", "assistant"]);
+export const ProcessingStage = z.enum(["upload", "parsing", "chunking", "embedding", "indexing"]);
+export const ProcessingStatus = z.enum(["pending", "in_progress", "completed", "failed", "cancelled"]);
 
 // Documents table - stores uploaded document metadata
 export const documents = pgTable(
@@ -100,6 +102,52 @@ export const conversationMessages = pgTable(
   })
 );
 
+// Document processing status table - tracks processing pipeline status
+export const documentProcessingStatus = pgTable(
+  "document_processing_status",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    currentStage: text("current_stage").notNull().$type<z.infer<typeof ProcessingStage>>(),
+    overallStatus: text("overall_status").notNull().$type<z.infer<typeof ProcessingStatus>>(),
+    // Stage details stored as JSONB
+    stages: jsonb("stages").notNull().default("{}").$type<Record<string, {
+      status: "pending" | "in_progress" | "completed" | "failed";
+      startedAt?: string;
+      completedAt?: string;
+      errorMessage?: string;
+      retryCount?: number;
+      estimatedDuration?: number;
+      actualDuration?: number;
+    }>>(),
+    // Processing metadata
+    metadata: jsonb("metadata").notNull().default("{}").$type<{
+      totalSize?: number;
+      estimatedDuration?: number;
+      chunkCount?: number;
+      embeddingDimensions?: number;
+      indexingMethod?: string;
+    }>(),
+    errorMessage: text("error_message"),
+    retryCount: integer("retry_count").notNull().default(0),
+    maxRetries: integer("max_retries").notNull().default(3),
+    progressPercentage: integer("progress_percentage").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    estimatedCompletionAt: timestamp("estimated_completion_at", { withTimezone: true }),
+  },
+  (table) => ({
+    documentIdIdx: index("processing_status_document_id_idx").on(table.documentId),
+    userIdIdx: index("processing_status_user_id_idx").on(table.userId),
+    statusIdx: index("processing_status_overall_status_idx").on(table.overallStatus),
+    stageIdx: index("processing_status_current_stage_idx").on(table.currentStage),
+    createdAtIdx: index("processing_status_created_at_idx").on(table.createdAt),
+    updatedAtIdx: index("processing_status_updated_at_idx").on(table.updatedAt),
+  })
+);
+
 // Type inference for TypeScript
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
@@ -112,6 +160,9 @@ export type NewConversation = typeof conversations.$inferInsert;
 
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type NewConversationMessage = typeof conversationMessages.$inferInsert;
+
+export type DocumentProcessingStatus = typeof documentProcessingStatus.$inferSelect;
+export type NewDocumentProcessingStatus = typeof documentProcessingStatus.$inferInsert;
 
 // Validation schemas using Zod
 export const createDocumentSchema = z.object({
@@ -154,4 +205,32 @@ export const createMessageSchema = z.object({
     chunkContent: z.string(),
     relevanceScore: z.number().min(0).max(1),
   })).default([]),
+});
+
+export const createProcessingStatusSchema = z.object({
+  id: z.string().min(1),
+  documentId: z.string().min(1),
+  userId: z.string().min(1),
+  currentStage: ProcessingStage,
+  overallStatus: ProcessingStatus,
+  stages: z.record(z.object({
+    status: z.enum(["pending", "in_progress", "completed", "failed"]),
+    startedAt: z.string().optional(),
+    completedAt: z.string().optional(),
+    errorMessage: z.string().optional(),
+    retryCount: z.number().int().min(0).optional(),
+    estimatedDuration: z.number().positive().optional(),
+    actualDuration: z.number().positive().optional(),
+  })),
+  metadata: z.object({
+    totalSize: z.number().positive().optional(),
+    estimatedDuration: z.number().positive().optional(),
+    chunkCount: z.number().int().min(0).optional(),
+    embeddingDimensions: z.number().int().positive().optional(),
+    indexingMethod: z.string().optional(),
+  }).default({}),
+  errorMessage: z.string().optional(),
+  retryCount: z.number().int().min(0).default(0),
+  maxRetries: z.number().int().min(0).default(3),
+  progressPercentage: z.number().int().min(0).max(100).default(0),
 });

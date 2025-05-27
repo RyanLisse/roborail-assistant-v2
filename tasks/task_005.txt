@@ -1,6 +1,6 @@
 # Task ID: 5
 # Title: Implement Document Management Service
-# Status: pending
+# Status: in-progress
 # Dependencies: 1, 2, 4
 # Priority: medium
 # Description: Develop DocMgmtService for CRUD operations on documents and metadata.
@@ -11,7 +11,7 @@ Support CRUD for documents with metadata (author, tags, department, access level
 Test document CRUD, metadata handling, and file management. Validate error handling.
 
 # Subtasks:
-## 1. Implement CRUD Operations for Documents and Metadata [pending]
+## 1. Implement CRUD Operations for Documents and Metadata [in-progress]
 ### Dependencies: None
 ### Description: Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning and audit trails.
 ### Details:

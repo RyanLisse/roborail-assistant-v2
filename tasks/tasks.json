@@ -173,7 +173,7 @@
       "id": 4,
       "title": "Build Document Upload and Processing Service",
       "description": "Implement UploadService and DocProcessingService for document ingestion and processing.",
-      "status": "in-progress",
+      "status": "done",
       "dependencies": [
         1,
         2
@@ -218,7 +218,7 @@
             3
           ],
           "details": "Utilize Cohere's AI capabilities to create meaningful semantic chunks and embeddings from extracted data.",
-          "status": "in-progress"
+          "status": "done"
         },
         {
           "id": 5,
@@ -228,7 +228,7 @@
             4
           ],
           "details": "Develop a dashboard or API to monitor processing status and implement robust error handling mechanisms.",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
@@ -236,7 +236,7 @@
       "id": 5,
       "title": "Implement Document Management Service",
       "description": "Develop DocMgmtService for CRUD operations on documents and metadata.",
-      "status": "pending",
+      "status": "in-progress",
       "dependencies": [
         1,
         2,
@@ -252,7 +252,7 @@
           "description": "Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning and audit trails.",
           "dependencies": [],
           "details": "This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning features as described in standard DMS architectures.",
-          "status": "pending"
+          "status": "in-progress"
         },
         {
           "id": 2,
