@@ -1,6 +1,6 @@
 # Task ID: 3
 # Title: Implement User Authentication and Access Control
-# Status: in-progress
+# Status: cancelled
 # Dependencies: 1, 2
 # Priority: high
 # Description: Develop authentication middleware and access control logic for all endpoints.

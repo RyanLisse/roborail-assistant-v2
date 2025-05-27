@@ -127,7 +127,7 @@
         1,
         2
       ],
-      "status": "in-progress",
+      "status": "cancelled",
       "subtasks": [
         {
           "id": 1,
@@ -173,15 +173,14 @@
       "id": 4,
       "title": "Build Document Upload and Processing Service",
       "description": "Implement UploadService and DocProcessingService for document ingestion and processing.",
-      "details": "Handle multipart form data for PDF, DOCX, TXT uploads (up to 50MB). Store raw files in Encore Bucket. Orchestrate Mastra AI workflow for parsing (Unstructured.io), semantic chunking, and embedding (Cohere embed-v4.0). Track processing status (queued → processing → processed → error).",
-      "testStrategy": "Test file upload, storage, and processing pipeline. Validate status tracking and error handling.",
-      "priority": "high",
+      "status": "pending",
       "dependencies": [
         1,
-        2,
-        3
+        2
       ],
-      "status": "pending",
+      "priority": "high",
+      "details": "Handle multipart form data for PDF, DOCX, TXT uploads (up to 50MB). Store raw files in Encore Bucket. Orchestrate Mastra AI workflow for parsing (Unstructured.io), semantic chunking, and embedding (Cohere embed-v4.0). Track processing status (queued → processing → processed → error).",
+      "testStrategy": "Test file upload, storage, and processing pipeline. Validate status tracking and error handling.",
       "subtasks": [
         {
           "id": 1,
@@ -237,23 +236,22 @@
       "id": 5,
       "title": "Implement Document Management Service",
       "description": "Develop DocMgmtService for CRUD operations on documents and metadata.",
-      "details": "Support CRUD for documents with metadata (author, tags, department, access level). Allow viewing, organizing, and deleting documents. Integrate with object storage for file management.",
-      "testStrategy": "Test document CRUD, metadata handling, and file management. Validate access control and error handling.",
-      "priority": "medium",
+      "status": "pending",
       "dependencies": [
         1,
         2,
-        3,
         4
       ],
-      "status": "pending",
+      "priority": "medium",
+      "details": "Support CRUD for documents with metadata (author, tags, department, access level). Allow viewing, organizing, and deleting documents. Integrate with object storage for file management.",
+      "testStrategy": "Test document CRUD, metadata handling, and file management. Validate error handling.",
       "subtasks": [
         {
           "id": 1,
           "title": "Implement CRUD Operations for Documents and Metadata",
-          "description": "Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning, access control, and audit trails.",
+          "description": "Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning and audit trails.",
           "dependencies": [],
-          "details": "This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning and security features as described in standard DMS architectures.",
+          "details": "This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning features as described in standard DMS architectures.",
           "status": "pending"
         },
         {
@@ -273,7 +271,7 @@
           "dependencies": [
             1
           ],
-          "details": "This includes implementing file upload/download logic, managing storage references in the metadata, and handling storage-specific concerns such as redundancy and access permissions.",
+          "details": "This includes implementing file upload/download logic, managing storage references in the metadata, and handling storage-specific concerns such as redundancy.",
           "status": "pending"
         }
       ]
@@ -282,17 +280,16 @@
       "id": 6,
       "title": "Build Search and Retrieval Service",
       "description": "Implement SearchService for hybrid search (vector + FTS) with reranking.",
-      "details": "Integrate PGVector for vector similarity, NeonDB for full-text search, and Cohere Rerank v3.0 for relevance optimization. Support filtering by metadata, date ranges, and access levels. Retrieve adjacent chunks for context expansion.",
-      "testStrategy": "Test hybrid search, reranking, and filtering. Validate context expansion and performance.",
-      "priority": "high",
+      "status": "pending",
       "dependencies": [
         1,
         2,
-        3,
         4,
         5
       ],
-      "status": "pending",
+      "priority": "high",
+      "details": "Integrate PGVector for vector similarity, NeonDB for full-text search, and Cohere Rerank v3.0 for relevance optimization. Support filtering by metadata, date ranges, and access levels. Retrieve adjacent chunks for context expansion.",
+      "testStrategy": "Test hybrid search, reranking, and filtering. Validate context expansion and performance.",
       "subtasks": [
         {
           "id": 1,
@@ -339,25 +336,24 @@
       "id": 7,
       "title": "Develop LLM Service and Structured Prompting",
       "description": "Implement LLMService as a Gemini API wrapper with structured prompting.",
-      "details": "Wrap Google Gemini 2.5 Flash API. Implement structured prompts for RAG responses. Handle citation parsing and follow-up generation.",
-      "testStrategy": "Test LLM API integration, prompt engineering, and citation parsing. Validate follow-up question generation.",
-      "priority": "high",
+      "status": "pending",
       "dependencies": [
         1,
         2,
-        3,
         4,
         5,
         6
       ],
-      "status": "pending",
+      "priority": "high",
+      "details": "Wrap Google Gemini 2.5 Flash API. Implement structured prompts for RAG responses. Handle citation parsing and follow-up generation.",
+      "testStrategy": "Test LLM API integration, prompt engineering, and citation parsing. Validate follow-up question generation.",
       "subtasks": [
         {
           "id": 1,
           "title": "Gemini API Integration and Wrapper Implementation",
-          "description": "Implement a Python wrapper for the Gemini API to handle authentication, request formatting, and response parsing",
+          "description": "Implement a Python wrapper for the Gemini API to handle request formatting and response parsing",
           "dependencies": [],
-          "details": "Set up REST API integration with proper authentication using API keys. Implement compatibility with OpenAI libraries by updating endpoint URLs and request formats. Create a wrapper class that handles both direct Gemini API calls and OpenAI-compatible interfaces. Test with basic prompts to ensure proper connectivity and response handling.",
+          "details": "Set up REST API integration without authentication as it's not needed for this app. Implement compatibility with OpenAI libraries by updating endpoint URLs and request formats. Create a wrapper class that handles both direct Gemini API calls and OpenAI-compatible interfaces. Test with basic prompts to ensure proper connectivity and response handling.",
           "status": "pending"
         },
         {

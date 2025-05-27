@@ -1,7 +1,7 @@
 # Task ID: 6
 # Title: Build Search and Retrieval Service
 # Status: pending
-# Dependencies: 1, 2, 3, 4, 5
+# Dependencies: 1, 2, 4, 5
 # Priority: high
 # Description: Implement SearchService for hybrid search (vector + FTS) with reranking.
 # Details:

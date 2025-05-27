@@ -1,21 +1,21 @@
 # Task ID: 5
 # Title: Implement Document Management Service
 # Status: pending
-# Dependencies: 1, 2, 3, 4
+# Dependencies: 1, 2, 4
 # Priority: medium
 # Description: Develop DocMgmtService for CRUD operations on documents and metadata.
 # Details:
 Support CRUD for documents with metadata (author, tags, department, access level). Allow viewing, organizing, and deleting documents. Integrate with object storage for file management.
 
 # Test Strategy:
-Test document CRUD, metadata handling, and file management. Validate access control and error handling.
+Test document CRUD, metadata handling, and file management. Validate error handling.
 
 # Subtasks:
 ## 1. Implement CRUD Operations for Documents and Metadata [pending]
 ### Dependencies: None
-### Description: Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning, access control, and audit trails.
+### Description: Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning and audit trails.
 ### Details:
-This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning and security features as described in standard DMS architectures.
+This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning features as described in standard DMS architectures.
 
 ## 2. Develop Document Organization and Filtering Functionality [pending]
 ### Dependencies: 5.1
@@ -27,5 +27,5 @@ This involves building indexing mechanisms, search APIs, and user interfaces for
 ### Dependencies: 5.1
 ### Description: Connect the document management system to an object storage service for storing and retrieving document files, ensuring scalability and secure access.
 ### Details:
-This includes implementing file upload/download logic, managing storage references in the metadata, and handling storage-specific concerns such as redundancy and access permissions.
+This includes implementing file upload/download logic, managing storage references in the metadata, and handling storage-specific concerns such as redundancy.
 

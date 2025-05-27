@@ -1,7 +1,7 @@
 # Task ID: 4
 # Title: Build Document Upload and Processing Service
 # Status: pending
-# Dependencies: 1, 2, 3
+# Dependencies: 1, 2
 # Priority: high
 # Description: Implement UploadService and DocProcessingService for document ingestion and processing.
 # Details:

@@ -1,9 +1,35 @@
 {
   "name": "roborail-assistant",
   "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/roborail-assistant.git"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "22.15.21",
+    "@typescript-eslint/eslint-plugin": "8.32.1",
+    "@typescript-eslint/parser": "8.32.1",
+    "concurrently": "9.1.2",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "husky": "9.1.7",
+    "lint-staged": "16.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "5.8.3",
+    "vitest": "3.1.4"
+  },
   "description": "Production-grade RAG chat application for knowledge workers",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["rag", "chat", "ai", "typescript", "encore", "nextjs"],
+  "license": "MIT",
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,css}": ["biome check --write --no-errors-on-unmatched"],
+    "*.{md}": ["prettier --write"]
+  },
   "private": true,
-  "workspaces": ["backend", "frontend", "shared"],
   "scripts": {
     "dev": "concurrently \"bun run dev:backend\" \"bun run dev:frontend\"",
     "dev:backend": "cd backend && encore run",
@@ -32,37 +58,5 @@
     "db:migrate": "encore db migrate",
     "prepare": "husky install"
   },
-  "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
-    "@types/node": "22.15.21",
-    "@typescript-eslint/eslint-plugin": "8.32.1",
-    "@typescript-eslint/parser": "8.32.1",
-    "concurrently": "9.1.2",
-    "eslint": "^8.0.0",
-    "eslint-config-prettier": "^9.0.0",
-    "husky": "9.1.7",
-    "lint-staged": "16.0.0",
-    "prettier": "^3.0.0",
-    "typescript": "5.8.3",
-    "vitest": "3.1.4"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,css}": ["biome check --write --no-errors-on-unmatched"],
-    "*.{md}": ["prettier --write"]
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/roborail-assistant.git"
-  },
-  "keywords": ["rag", "chat", "ai", "typescript", "encore", "nextjs"],
-  "license": "MIT",
-  "dependencies": {
-    "@types/express": "^5.0.2",
-    "@types/jsonwebtoken": "^9.0.9",
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2"
-  }
+  "workspaces": ["backend", "frontend", "shared"]
 }
