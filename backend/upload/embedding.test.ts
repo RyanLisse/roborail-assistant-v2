@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 
-// Types for semantic chunking and embedding
-interface ChunkingRequest {
+// Import types from the actual implementation for testing
+type ChunkingRequest = {
   documentId: string;
   extractedText: string;
   elements: ParsedElement[];
   metadata: DocumentMetadata;
-}
+};
 
 interface ChunkingResponse {
   documentId: string;
