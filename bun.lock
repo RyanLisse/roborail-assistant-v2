@@ -3,6 +3,9 @@
   "workspaces": {
     "": {
       "name": "roborail-assistant",
+      "dependencies": {
+        "nanoid": "^5.1.5",
+      },
       "devDependencies": {
         "@biomejs/biome": "^1.9.4",
         "@types/node": "22.15.21",

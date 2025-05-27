@@ -58,5 +58,8 @@
     "db:migrate": "encore db migrate",
     "prepare": "husky install"
   },
-  "workspaces": ["backend", "frontend", "shared"]
+  "workspaces": ["backend", "frontend", "shared"],
+  "dependencies": {
+    "nanoid": "^5.1.5"
+  }
 }

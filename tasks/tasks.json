@@ -188,7 +188,7 @@
           "description": "Develop a service to handle file uploads and validate their integrity and format.",
           "dependencies": [],
           "details": "Ensure the service can handle large files and various formats, and validate file types and sizes.",
-          "status": "in-progress"
+          "status": "done"
         },
         {
           "id": 2,

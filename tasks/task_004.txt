@@ -11,7 +11,7 @@ Handle multipart form data for PDF, DOCX, TXT uploads (up to 50MB). Store raw fi
 Test file upload, storage, and processing pipeline. Validate status tracking and error handling.
 
 # Subtasks:
-## 1. File Upload and Validation Service [in-progress]
+## 1. File Upload and Validation Service [done]
 ### Dependencies: None
 ### Description: Develop a service to handle file uploads and validate their integrity and format.
 ### Details:
