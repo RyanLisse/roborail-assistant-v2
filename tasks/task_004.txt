@@ -1,6 +1,6 @@
 # Task ID: 4
 # Title: Build Document Upload and Processing Service
-# Status: pending
+# Status: in-progress
 # Dependencies: 1, 2
 # Priority: high
 # Description: Implement UploadService and DocProcessingService for document ingestion and processing.
@@ -11,7 +11,7 @@ Handle multipart form data for PDF, DOCX, TXT uploads (up to 50MB). Store raw fi
 Test file upload, storage, and processing pipeline. Validate status tracking and error handling.
 
 # Subtasks:
-## 1. File Upload and Validation Service [pending]
+## 1. File Upload and Validation Service [in-progress]
 ### Dependencies: None
 ### Description: Develop a service to handle file uploads and validate their integrity and format.
 ### Details:
