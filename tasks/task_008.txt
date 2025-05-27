@@ -1,7 +1,7 @@
 # Task ID: 8
 # Title: Build Chat Service and RAG Agent Orchestration
-# Status: pending
-# Dependencies: 1, 2, 3, 4, 5, 6, 7
+# Status: done
+# Dependencies: 1, 2, 4, 5, 6, 7
 # Priority: high
 # Description: Develop ChatService for conversation management and RAG agent orchestration.
 # Details:
@@ -11,25 +11,25 @@ Manage chat conversations (create, resume, auto-save drafts). Orchestrate RAG ag
 Test conversation management, RAG orchestration, and context management. Validate auto-save and history pruning.
 
 # Subtasks:
-## 1. Conversation Management (Creation and Resumption) [pending]
+## 1. Conversation Management (Creation and Resumption) [done]
 ### Dependencies: None
 ### Description: Design and implement mechanisms for creating new conversations and resuming existing ones, ensuring proper state persistence and retrieval.
 ### Details:
 Define conversation data models, endpoints for creation and resumption, and ensure conversations are uniquely identifiable and retrievable.
 
-## 2. RAG Agent Orchestration for Contextual Responses [pending]
+## 2. RAG Agent Orchestration for Contextual Responses [done]
 ### Dependencies: 8.1
 ### Description: Integrate and orchestrate Retrieval-Augmented Generation (RAG) agents to provide contextual responses within conversations, managing the flow between search, retrieval, and LLM components.
 ### Details:
 Implement workflow to retrieve relevant context, invoke LLMs, and maintain conversation state across agent interactions.
 
-## 3. Draft Auto-Save Functionality [pending]
+## 3. Draft Auto-Save Functionality [done]
 ### Dependencies: 8.1
 ### Description: Implement auto-save for message drafts within conversations, ensuring users do not lose progress and can resume unfinished messages.
 ### Details:
 Design draft storage, trigger auto-save events, and provide retrieval endpoints for draft restoration.
 
-## 4. History Pruning and Context Management [pending]
+## 4. History Pruning and Context Management [done]
 ### Dependencies: 8.2
 ### Description: Develop mechanisms to prune conversation history and manage context windows, optimizing performance and ensuring relevant context is maintained for RAG workflows.
 ### Details:

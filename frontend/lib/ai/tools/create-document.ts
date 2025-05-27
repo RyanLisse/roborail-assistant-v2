@@ -1,11 +1,10 @@
 import { artifactKinds, documentHandlersByArtifactKind } from "@/lib/artifacts/server";
 import { generateUUID } from "@/lib/utils";
 import { type DataStreamWriter, tool } from "ai";
-import type { Session } from "next-auth";
 import { z } from "zod";
 
 interface CreateDocumentProps {
-  session: Session;
+  session: any; // Simplified session type for unauthenticated use
   dataStream: DataStreamWriter;
 }
 

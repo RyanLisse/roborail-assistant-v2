@@ -1,4 +1,3 @@
-import { auth } from "@/app/(auth)/auth";
 import type { ArtifactKind } from "@/components/artifact";
 import {
   deleteDocumentsByIdAfterTimestamp,
@@ -15,11 +14,7 @@ export async function GET(request: Request) {
     return new ChatSDKError("bad_request:api", "Parameter id is missing").toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError("unauthorized:document").toResponse();
-  }
+  // Authentication removed - simplified for unauthenticated use
 
   const documents = await getDocumentsById({ id });
 
@@ -29,9 +24,7 @@ export async function GET(request: Request) {
     return new ChatSDKError("not_found:document").toResponse();
   }
 
-  if (document.userId !== session.user.id) {
-    return new ChatSDKError("forbidden:document").toResponse();
-  }
+  // Skip user ownership check for simplified unauthenticated use
 
   return Response.json(documents, { status: 200 });
 }
@@ -44,11 +37,7 @@ export async function POST(request: Request) {
     return new ChatSDKError("bad_request:api", "Parameter id is required.").toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError("not_found:document").toResponse();
-  }
+  // Authentication removed - simplified for unauthenticated use
 
   const { content, title, kind }: { content: string; title: string; kind: ArtifactKind } =
     await request.json();
@@ -56,11 +45,7 @@ export async function POST(request: Request) {
   const documents = await getDocumentsById({ id });
 
   if (documents.length > 0) {
-    const [document] = documents;
-
-    if (document.userId !== session.user.id) {
-      return new ChatSDKError("forbidden:document").toResponse();
-    }
+    // Skip user ownership check for simplified unauthenticated use
   }
 
   const document = await saveDocument({
@@ -68,7 +53,7 @@ export async function POST(request: Request) {
     content,
     title,
     kind,
-    userId: session.user.id,
+    userId: "anonymous",
   });
 
   return Response.json(document, { status: 200 });
@@ -87,19 +72,13 @@ export async function DELETE(request: Request) {
     return new ChatSDKError("bad_request:api", "Parameter timestamp is required.").toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError("unauthorized:document").toResponse();
-  }
+  // Authentication removed - simplified for unauthenticated use
 
   const documents = await getDocumentsById({ id });
 
   const [document] = documents;
 
-  if (document.userId !== session.user.id) {
-    return new ChatSDKError("forbidden:document").toResponse();
-  }
+  // Skip user ownership check for simplified unauthenticated use
 
   const documentsDeleted = await deleteDocumentsByIdAfterTimestamp({
     id,

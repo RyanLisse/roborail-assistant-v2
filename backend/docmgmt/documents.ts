@@ -4,6 +4,13 @@ import { db } from "../db/connection";
 import { documents, documentChunks, type Document as DBDocument, type DocumentChunk } from "../db/schema";
 import { eq, and, desc, asc, like, ilike, count, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import log from "encore.dev/log";
+import { CacheService } from "../lib/cache/cache.service";
+import { type DocumentMetadataCacheKey } from "../lib/infrastructure/cache/cache";
+import type { PlaceholderDocumentObject } from "../lib/cache/cache.service";
+
+// Create a service-specific logger instance
+const logger = log.with({ service: "docmgmt-service" });
 
 // Validation schemas
 export const DocumentFilterSchema = z.object({
@@ -118,6 +125,14 @@ export const getDocuments = api(
     sortOrder?: string;
   }): Promise<DocumentListResponse> => {
     try {
+      logger.info("Received request to get user documents", {
+        userId: request.userId,
+        page: request.page,
+        limit: request.limit,
+        status: request.status,
+        search: request.search,
+      });
+
       // Validate and parse request
       const validated = DocumentFilterSchema.parse(request);
       const { userId, page, limit, status, contentType, search, sortBy, sortOrder } = validated;
@@ -184,6 +199,21 @@ export const getDocuments = api(
       
     } catch (error) {
       console.error('Error retrieving documents:', error);
+      const errorMessage = 'Failed to retrieve documents';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          userId: request.userId,
+          page: request.page,
+          limit: request.limit,
+        });
+      } else {
+        logger.error(errorMessage, {
+          userId: request.userId,
+          page: request.page,
+          limit: request.limit,
+          error: error,
+        });
+      }
       throw new Error(`Failed to retrieve documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -194,16 +224,70 @@ export const getDocument = api(
   { expose: true, method: "GET", path: "/documents/:documentId" },
   async ({ documentId, userId }: { documentId: string; userId: string }): Promise<Document> => {
     try {
+      logger.info("Received request to get document", {
+        documentId: documentId,
+        userId: userId,
+      });
+
+      const cacheKey: DocumentMetadataCacheKey = { documentId };
+      const cachedDoc = await CacheService.getCachedDocumentMetadata(cacheKey);
+
+      if (cachedDoc) {
+        logger.info("Successfully retrieved document from cache", {
+          documentId: documentId,
+          userId: userId,
+        });
+        // Format the cached data to match the expected Document response type
+        // This assumes PlaceholderDocumentObject is compatible or can be mapped to DBDocument for formatDocumentResponse
+        // If PlaceholderDocumentObject directly matches Document, you can return it (after ensuring Date types)
+        return formatDocumentResponse(cachedDoc as unknown as DBDocument); // Casting needed if types don't align perfectly
+      }
+
       const doc = await verifyDocumentAccess(documentId, userId);
       
       if (!doc) {
         throw new Error("Document not found or access denied");
       }
       
+      logger.info("Successfully retrieved document from DB", {
+        documentId: documentId,
+        userId: userId,
+      });
+      
+      // Cache the document metadata after fetching from DB
+      // Ensure the object structure matches PlaceholderDocumentObject
+      const docToCache: PlaceholderDocumentObject = {
+        id: doc.id,
+        userId: doc.userId, // Ensure userId is part of your DBDocument if caching it
+        filename: doc.filename,
+        originalName: doc.originalName,
+        contentType: doc.contentType,
+        fileSize: doc.fileSize,
+        status: doc.status,
+        uploadedAt: doc.uploadedAt,
+        // processedAt: doc.processedAt, // Add if in PlaceholderDocumentObject
+        // chunkCount: doc.chunkCount, // Add if in PlaceholderDocumentObject
+        metadata: doc.metadata,
+      };
+      await CacheService.setCachedDocumentMetadata(cacheKey, docToCache);
+
       return formatDocumentResponse(doc);
       
     } catch (error) {
       console.error('Error retrieving document:', error);
+      const errorMessage = 'Failed to retrieve document';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          documentId: documentId,
+          userId: userId,
+        });
+      } else {
+        logger.error(errorMessage, {
+          documentId: documentId,
+          userId: userId,
+          error: error,
+        });
+      }
       throw new Error(`Failed to retrieve document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -224,6 +308,13 @@ export const updateDocument = api(
     filename?: string;
   }): Promise<Document> => {
     try {
+      logger.info("Received request to update document", {
+        documentId: documentId,
+        userId: userId,
+        metadata: metadata,
+        filename: filename,
+      });
+
       // Validate request
       const validated = DocumentUpdateSchema.parse({
         documentId,
@@ -267,10 +358,35 @@ export const updateDocument = api(
       }
       
       console.log(`Updated document ${documentId} metadata`);
+      logger.info("Successfully updated document", {
+        documentId: documentId,
+        userId: userId,
+        updatedFields: Object.keys(updateData),
+      });
+
+      // Invalidate cache for this document
+      const cacheKey: DocumentMetadataCacheKey = { documentId };
+      await CacheService.deleteCachedDocumentMetadata(cacheKey);
+
       return formatDocumentResponse(result[0]);
       
     } catch (error) {
       console.error('Error updating document:', error);
+      const errorMessage = 'Failed to update document';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          documentId: documentId,
+          userId: userId,
+          updatePayload: { metadata, filename },
+        });
+      } else {
+        logger.error(errorMessage, {
+          documentId: documentId,
+          userId: userId,
+          updatePayload: { metadata, filename },
+          error: error,
+        });
+      }
       throw new Error(`Failed to update document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -281,6 +397,11 @@ export const deleteDocument = api(
   { expose: true, method: "DELETE", path: "/documents/:documentId" },
   async ({ documentId, userId }: { documentId: string; userId: string }): Promise<{ success: boolean }> => {
     try {
+      logger.info("Received request to delete document", {
+        documentId: documentId,
+        userId: userId,
+      });
+
       // Verify document access
       const existingDoc = await verifyDocumentAccess(documentId, userId);
       if (!existingDoc) {
@@ -299,13 +420,34 @@ export const deleteDocument = api(
       }
       
       console.log(`Deleted document ${documentId} and all associated data`);
+      logger.info("Successfully deleted document", {
+        documentId: documentId,
+        userId: userId,
+      });
       
+      // Invalidate cache for this document
+      const cacheKey: DocumentMetadataCacheKey = { documentId };
+      await CacheService.deleteCachedDocumentMetadata(cacheKey);
+
       return {
         success: true,
       };
       
     } catch (error) {
       console.error('Error deleting document:', error);
+      const errorMessage = 'Failed to delete document';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          documentId: documentId,
+          userId: userId,
+        });
+      } else {
+        logger.error(errorMessage, {
+          documentId: documentId,
+          userId: userId,
+          error: error,
+        });
+      }
       throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

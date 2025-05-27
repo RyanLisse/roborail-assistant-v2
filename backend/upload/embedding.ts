@@ -1,7 +1,15 @@
-import { secret } from "encore.dev/config";
+import { MultiLevelEmbeddingCache } from "../lib/infrastructure/cache/embedding-cache";
+import { MetricHelpers, recordError } from "../lib/monitoring/metrics";
+import { loggers } from "../lib/monitoring/logger";
+import { config } from "../../shared/config/environment";
+import { MetricsRecorder } from "../../shared/infrastructure/monitoring/metrics";
 
-// Encore secret for Cohere API key
-const cohereApiKey = secret("CohereApiKey");
+// Use centralized configuration for Cohere API key
+const cohereApiKey = config.ai.cohereApiKey;
+
+// Initialize embedding cache and logger
+const embeddingCache = new MultiLevelEmbeddingCache();
+const logger = loggers.upload;
 
 // Types for semantic chunking and embedding
 export interface ChunkingRequest {
@@ -447,11 +455,32 @@ function calculateImportance(content: string, elementTypes: string[]): number {
   return Math.min(1.0, importance);
 }
 
-// Generate embeddings using Cohere API
+// Generate embeddings using Cohere API with caching
 export async function generateEmbeddings(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+  const startTime = Date.now();
+  const inputType = request.inputType || 'search_document';
+  const batchSize = request.texts.length;
+
+  // Start performance timer
+  const timer = logger.startTimer('embedding-generation');
+
+  logger.info('Starting embedding generation', {
+    inputType,
+    batchSize,
+    model: 'embed-english-v4.0'
+  });
+
   try {
+    // Track request metrics
+    MetricHelpers.trackEmbeddingRequest('embed-english-v4.0', inputType, batchSize);
+
     // Validate input
     if (!request.texts || request.texts.length === 0) {
+      logger.error('Invalid embedding request: empty texts array', {
+        inputType,
+        batchSize: 0
+      });
+      recordError('upload', 'INVALID_INPUT', 'Texts array cannot be empty');
       const error: ChunkingError = {
         type: 'INVALID_INPUT',
         message: 'Texts array cannot be empty',
@@ -459,28 +488,148 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
       throw error;
     }
 
-    // Process in batches if necessary
-    const allEmbeddings: number[][] = [];
+    // Try to get cached embeddings first
+    const cachedEmbeddings: number[][] = [];
+    const uncachedTexts: string[] = [];
+    const textIndexMap: number[] = []; // Maps uncached index to original index
+
+    for (let i = 0; i < request.texts.length; i++) {
+      try {
+        const cached = await embeddingCache.get(request.texts[i]);
+        if (cached) {
+          cachedEmbeddings[i] = cached;
+        } else {
+          uncachedTexts.push(request.texts[i]);
+          textIndexMap.push(i);
+        }
+      } catch (cacheError) {
+        console.warn('Cache error during retrieval for text:', request.texts[i].substring(0, 50), cacheError);
+        uncachedTexts.push(request.texts[i]);
+        textIndexMap.push(i);
+      }
+    }
+
+    // If all embeddings were cached, return early
+    if (uncachedTexts.length === 0) {
+      logger.info('Full cache hit for embedding request', {
+        totalTexts: request.texts.length,
+        cacheHitRate: 1.0,
+        inputType
+      });
+      const totalTokens = request.texts.reduce((sum, text) => sum + estimateTokenCount(text), 0);
+      timer.end({ 
+        cacheHitRate: 1.0, 
+        totalTokens, 
+        apiCallsMade: 0 
+      });
+      return {
+        embeddings: cachedEmbeddings,
+        model: 'embed-english-v4.0',
+        usage: { totalTokens },
+      };
+    }
+
+    const cacheHitRate = (request.texts.length - uncachedTexts.length) / request.texts.length;
+    logger.info('Partial cache hit for embedding request', {
+      totalTexts: request.texts.length,
+      cachedTexts: request.texts.length - uncachedTexts.length,
+      uncachedTexts: uncachedTexts.length,
+      cacheHitRate,
+      inputType
+    });
+
+    // Process uncached texts in batches
+    const newEmbeddings: number[][] = [];
     let totalTokens = 0;
 
-    for (let i = 0; i < request.texts.length; i += MAX_EMBEDDING_BATCH_SIZE) {
-      const batch = request.texts.slice(i, i + MAX_EMBEDDING_BATCH_SIZE);
+    for (let i = 0; i < uncachedTexts.length; i += MAX_EMBEDDING_BATCH_SIZE) {
+      const batch = uncachedTexts.slice(i, i + MAX_EMBEDDING_BATCH_SIZE);
       const batchResponse = await generateEmbeddingBatch(batch, request.inputType || 'search_document');
       
-      allEmbeddings.push(...batchResponse.embeddings);
+      newEmbeddings.push(...batchResponse.embeddings);
       totalTokens += batchResponse.usage.totalTokens;
     }
 
-    return {
-      embeddings: allEmbeddings,
+    // Cache new embeddings individually
+    const cachePromises = uncachedTexts.map(async (text, index) => {
+      try {
+        await embeddingCache.set(text, newEmbeddings[index]);
+      } catch (cacheError) {
+        console.warn('Cache error during storage for text:', text.substring(0, 50), cacheError);
+      }
+    });
+    
+    // Don't wait for caching to complete, but log when done
+    Promise.all(cachePromises).then(() => {
+      console.log(`Cached ${uncachedTexts.length} new embeddings`);
+    }).catch(error => {
+      console.warn('Some embeddings failed to cache:', error);
+    });
+
+    // Combine cached and new embeddings in correct order
+    const finalEmbeddings: number[][] = [...cachedEmbeddings];
+    textIndexMap.forEach((originalIndex, uncachedIndex) => {
+      finalEmbeddings[originalIndex] = newEmbeddings[uncachedIndex];
+    });
+
+    // Add tokens from cached embeddings
+    const cachedTokens = request.texts
+      .filter((_, index) => cachedEmbeddings[index])
+      .reduce((sum, text) => sum + estimateTokenCount(text), 0);
+
+    const result: EmbeddingResponse = {
+      embeddings: finalEmbeddings,
       model: 'embed-english-v4.0',
       usage: {
-        totalTokens,
+        totalTokens: totalTokens + cachedTokens,
       },
     };
 
+    // Track success metrics
+    const duration = Date.now() - startTime;
+    MetricHelpers.trackEmbeddingDuration(duration, 'embed-english-v4.0', batchSize);
+    
+    // Record metrics using new MetricsRecorder
+    MetricsRecorder.recordEmbeddingGeneration(duration, batchSize, 'embed-english-v4.0');
+
+    logger.info('Embedding generation completed successfully', {
+      totalTexts: request.texts.length,
+      finalEmbeddings: result.embeddings.length,
+      totalTokens: result.usage.totalTokens,
+      duration,
+      model: result.model
+    });
+
+    timer.end({ 
+      success: true,
+      totalTokens: result.usage.totalTokens,
+      finalEmbeddings: result.embeddings.length
+    });
+
+    return result;
+
   } catch (error) {
-    console.error('Embedding generation error:', error);
+    const duration = Date.now() - startTime;
+    
+    // Log detailed error information
+    logger.error('Embedding generation failed', {
+      inputType,
+      batchSize,
+      duration,
+      textsLength: request.texts.map(t => t.length)
+    }, error instanceof Error ? error : undefined);
+    
+    // Record error metrics
+    if (error && typeof error === 'object' && 'type' in error) {
+      recordError('upload', (error as ChunkingError).type, (error as ChunkingError).message);
+    } else {
+      recordError('upload', 'EMBEDDING_FAILED', error instanceof Error ? error.message : 'Unknown error');
+    }
+
+    timer.end({ 
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
     
     // If already a ChunkingError, re-throw as is
     if (error && typeof error === 'object' && 'type' in error) {

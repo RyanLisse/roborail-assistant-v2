@@ -83,3 +83,4 @@ playwright-report/
 
 # Drizzle
 drizzle/
+.vercel

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 
 // Test utility functions without Encore dependencies
 interface DocumentChunk {

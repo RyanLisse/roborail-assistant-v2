@@ -1134,6 +1134,109 @@ export const LineChartIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+export const XIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M11.7516 4.25L8.00156 8L4.25156 4.25L3.75156 4.75L7.50156 8.5L3.75156 12.25L4.25156 12.75L8.00156 9L11.7516 12.75L12.2516 12.25L8.50156 8.5L12.2516 4.75L11.7516 4.25Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+export const SearchIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle
+      cx="6.5"
+      cy="6.5"
+      r="5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      fill="none"
+    />
+    <path
+      d="M11 11L14.5 14.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const ExternalLinkIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M5 2.5H2.5V13.5H13.5V11M11 1.5H14.5V5M6.5 9.5L14 2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const DocumentTextIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M3 2.5V13.5C3 14.0523 3.44772 14.5 4 14.5H12C12.5523 14.5 13 14.0523 13 13.5V5.5L10 2.5H4C3.44772 2.5 3 2.94772 3 3.5Z"
+      fill="currentColor"
+    />
+    <path
+      d="M10 2.5V5.5H13"
+      stroke="white"
+      strokeWidth="1"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M5.5 8.5H10.5M5.5 10.5H10.5M5.5 6.5H8"
+      stroke="white"
+      strokeWidth="0.8"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const ChatIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M2 3.5C2 2.94772 2.44772 2.5 3 2.5H13C13.5523 2.5 14 2.94772 14 3.5V9.5C14 10.0523 13.5523 10.5 13 10.5H5.41421L3.70711 12.2071C3.42111 12.4931 3 12.2866 3 11.9142V10.5H3C2.44772 10.5 2 10.0523 2 9.5V3.5Z"
+      fill="currentColor"
+    />
+    <circle cx="5" cy="6.5" r="0.75" fill="white" />
+    <circle cx="8" cy="6.5" r="0.75" fill="white" />
+    <circle cx="11" cy="6.5" r="0.75" fill="white" />
+  </svg>
+);
+
 export const WarningIcon = ({ size = 16 }: { size?: number }) => {
   return (
     <svg

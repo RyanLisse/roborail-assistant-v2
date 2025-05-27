@@ -890,7 +890,7 @@ export const getSavedFilters = api(
         )
         .orderBy(desc(savedFilters.updatedAt));
       
-      return results.map(result => ({
+      const filters = results.map(result => ({
         id: result.id,
         userId: result.userId,
         name: result.name,
@@ -901,6 +901,11 @@ export const getSavedFilters = api(
         createdAt: result.createdAt,
         updatedAt: result.updatedAt,
       }));
+      
+      return {
+        filters,
+        total: filters.length,
+      };
       
     } catch (error) {
       console.error('Error retrieving saved filters:', error);
@@ -977,7 +982,7 @@ export const applySavedFilter = api(
 // Organization Recommendations API
 export const getOrganizationRecommendations = api(
   { expose: true, method: "GET", path: "/organization/recommendations" },
-  async ({ userId }: { userId: string }): Promise<Array<OrganizationRecommendation>> => {
+  async ({ userId }: { userId: string }): Promise<OrganizationRecommendationsResponse> => {
     try {
       const recommendations: OrganizationRecommendation[] = [];
       
@@ -1047,9 +1052,14 @@ export const getOrganizationRecommendations = api(
       });
       
       // Sort by confidence and limit results
-      return recommendations
+      const sortedRecommendations = recommendations
         .sort((a, b) => b.confidence - a.confidence)
         .slice(0, 5);
+      
+      return {
+        recommendations: sortedRecommendations,
+        total: sortedRecommendations.length,
+      };
       
     } catch (error) {
       console.error('Error generating organization recommendations:', error);

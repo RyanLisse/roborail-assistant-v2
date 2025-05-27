@@ -5,9 +5,18 @@ import { z } from "zod";
 import { db } from "../db/connection";
 import { documentChunks, documents } from "../db/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { CacheManager } from "../lib/cache/cache-manager";
+import { EmbeddingCache } from "../lib/cache/embedding-cache";
+import { MetricHelpers, recordError } from "../lib/monitoring/metrics";
+import { loggers } from "../lib/monitoring/logger";
 
 // Encore secret for Cohere API key
 const cohereApiKey = secret("CohereApiKey");
+
+// Initialize cache managers and logger
+const searchCache = new CacheManager();
+const embeddingCache = new EmbeddingCache();
+const logger = loggers.search;
 
 // Validation schemas
 export const SearchRequestSchema = z.object({
@@ -102,6 +111,7 @@ export interface SearchResponse {
   totalFound: number;
   query: string;
   processingTime: number;
+  searchType?: string;
 }
 
 export interface ExpandedSearchResponse extends SearchResponse {
@@ -162,11 +172,20 @@ async function rerankWithCohere(
   results: SearchResult[],
   topN?: number
 ): Promise<SearchResult[]> {
+  const timer = logger.startTimer('reranking');
+  
   try {
     if (results.length === 0) {
-      console.log("No results to rerank");
+      logger.info("No results to rerank");
       return results;
     }
+
+    logger.info("Starting result reranking", {
+      inputResults: results.length,
+      query: query.substring(0, 100),
+      topN: topN || Math.min(results.length, 20),
+      model: "rerank-english-v3.0"
+    });
 
     const apiKey = await cohereApiKey();
     
@@ -188,8 +207,6 @@ async function rerankWithCohere(
       model: "rerank-english-v3.0",
       return_documents: true,
     };
-
-    console.log(`Reranking ${results.length} results with query: "${query}"`);
     
     const response = await fetch("https://api.cohere.ai/v1/rerank", {
       method: "POST",
@@ -203,13 +220,24 @@ async function rerankWithCohere(
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Cohere rerank API error (${response.status}): ${errorText}`);
+      const error = new Error(`Cohere rerank API error (${response.status}): ${errorText}`);
+      logger.error("Reranking API request failed", {
+        status: response.status,
+        query: query.substring(0, 100),
+        inputResults: results.length,
+        duration: timer.stop()
+      }, error);
+      throw error;
     }
 
     const data: CohereRerankResponse = await response.json();
     
     if (!data.results || data.results.length === 0) {
-      console.log("No reranked results returned from Cohere API");
+      logger.warn("Empty reranking response from Cohere API", {
+        query: query.substring(0, 100),
+        inputResults: results.length,
+        duration: timer.stop()
+      });
       return results;
     }
 
@@ -228,29 +256,75 @@ async function rerankWithCohere(
       };
     });
 
-    console.log(`Reranking completed: ${rerankedResults.length} results reordered`);
+    const duration = timer.stop();
+    logger.info("Reranking completed successfully", {
+      inputResults: results.length,
+      outputResults: rerankedResults.length,
+      query: query.substring(0, 100),
+      duration,
+      avgRelevanceScore: rerankedResults.reduce((sum, r) => sum + r.score, 0) / rerankedResults.length,
+      model: "rerank-english-v3.0",
+      billedUnits: data.meta?.billed_units?.search_units
+    });
+
     return rerankedResults;
     
   } catch (error) {
-    console.error("Error reranking results with Cohere:", error);
+    const duration = timer.stop();
+    logger.error("Reranking failed, falling back to original ordering", {
+      query: query.substring(0, 100),
+      inputResults: results.length,
+      duration
+    }, error instanceof Error ? error : undefined);
+    
     // Fall back to original results if reranking fails
-    console.log("Falling back to original result ordering");
     return results;
   }
 }
 
-// Helper function to generate embeddings using Cohere
+// Helper function to generate embeddings using Cohere with caching
 async function generateQueryEmbedding(query: string): Promise<number[]> {
+  const timer = logger.startTimer('query-embedding');
+  
   try {
+    logger.info("Starting query embedding generation", {
+      query: query.substring(0, 100),
+      model: "embed-english-v4.0",
+      inputType: "search_query"
+    });
+
+    // Try to get cached embedding first
+    const embeddingRequest = {
+      texts: [query],
+      inputType: 'search_query' as const
+    };
+
+    try {
+      const cachedResult = await embeddingCache.getCachedEmbedding(embeddingRequest);
+      if (cachedResult && cachedResult.embeddings.length > 0) {
+        const duration = timer.stop();
+        logger.info("Cache hit for query embedding", {
+          query: query.substring(0, 100),
+          duration,
+          dimensions: cachedResult.embeddings[0].length
+        });
+        MetricHelpers.trackCacheHit('search', 'embedding');
+        return cachedResult.embeddings[0];
+      }
+    } catch (cacheError) {
+      logger.warn('Embedding cache retrieval failed, falling back to API', {
+        query: query.substring(0, 100)
+      }, cacheError instanceof Error ? cacheError : undefined);
+      MetricHelpers.trackCacheMiss('search', 'embedding');
+    }
+
     const apiKey = await cohereApiKey();
     
     const requestBody: CohereEmbedRequest = {
       texts: [query],
-      model: "embed-english-v3.0", // Using v3.0 for search queries
+      model: "embed-english-v4.0", // Using v4.0 to match document embeddings
       input_type: "search_query"
     };
-
-    console.log(`Generating embedding for query: "${query}"`);
     
     const response = await fetch("https://api.cohere.ai/v1/embed", {
       method: "POST",
@@ -264,20 +338,59 @@ async function generateQueryEmbedding(query: string): Promise<number[]> {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Cohere API error (${response.status}): ${errorText}`);
+      const error = new Error(`Cohere API error (${response.status}): ${errorText}`);
+      logger.error("Query embedding API request failed", {
+        status: response.status,
+        query: query.substring(0, 100),
+        duration: timer.stop()
+      }, error);
+      throw error;
     }
 
     const data: CohereEmbedResponse = await response.json();
     
     if (!data.embeddings || data.embeddings.length === 0) {
-      throw new Error("No embeddings returned from Cohere API");
+      const error = new Error("No embeddings returned from Cohere API");
+      logger.error("Empty embedding response from Cohere API", {
+        query: query.substring(0, 100),
+        duration: timer.stop()
+      }, error);
+      throw error;
     }
 
-    console.log(`Generated embedding with ${data.embeddings[0].length} dimensions`);
+    // Cache the result for future use
+    try {
+      const embeddingResponse = {
+        embeddings: data.embeddings,
+        model: 'embed-english-v4.0',
+        usage: { totalTokens: query.split(' ').length * 1.3 } // Estimate tokens
+      };
+      await embeddingCache.cacheEmbedding(embeddingRequest, embeddingResponse);
+      logger.debug("Successfully cached query embedding", {
+        query: query.substring(0, 100)
+      });
+    } catch (cacheError) {
+      logger.warn('Failed to cache query embedding', {
+        query: query.substring(0, 100)
+      }, cacheError instanceof Error ? cacheError : undefined);
+    }
+
+    const duration = timer.stop();
+    logger.info("Query embedding generated successfully", {
+      query: query.substring(0, 100),
+      dimensions: data.embeddings[0].length,
+      duration,
+      model: "embed-english-v4.0"
+    });
+
     return data.embeddings[0];
     
   } catch (error) {
-    console.error("Error generating query embedding:", error);
+    const duration = timer.stop();
+    logger.error("Query embedding generation failed", {
+      query: query.substring(0, 100),
+      duration
+    }, error instanceof Error ? error : undefined);
     throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -289,8 +402,15 @@ async function performFullTextSearch(
   documentIDs?: string[],
   limit: number = 20
 ): Promise<SearchResult[]> {
+  const timer = logger.startTimer('fulltext-search');
+  
   try {
-    console.log(`Performing full-text search for: "${query}"`);
+    logger.info("Starting full-text search", {
+      query: query.substring(0, 100),
+      userID,
+      documentIDs: documentIDs?.length || 0,
+      limit
+    });
     
     // Escape special characters for tsquery
     const sanitizedQuery = query
@@ -299,9 +419,17 @@ async function performFullTextSearch(
       .trim();
     
     if (!sanitizedQuery) {
-      console.log("Empty query after sanitization");
+      logger.warn("Empty query after sanitization", {
+        originalQuery: query.substring(0, 100),
+        duration: timer.stop()
+      });
       return [];
     }
+    
+    logger.debug("Query sanitized for FTS", {
+      originalQuery: query.substring(0, 100),
+      sanitizedQuery: sanitizedQuery.substring(0, 100)
+    });
     
     // Build base query with full-text search
     let baseQuery = db
@@ -325,6 +453,9 @@ async function performFullTextSearch(
     // Add document ID filtering if specified
     if (documentIDs && documentIDs.length > 0) {
       baseQuery = baseQuery.where(sql`${documentChunks.documentId} = ANY(${documentIDs})`);
+      logger.debug("Applied document ID filtering", {
+        documentCount: documentIDs.length
+      });
     }
 
     // Add full-text search matching and ordering
@@ -333,9 +464,7 @@ async function performFullTextSearch(
       .orderBy(desc(sql`ts_rank(to_tsvector('english', ${documentChunks.content}), plainto_tsquery('english', ${sanitizedQuery}))`))
       .limit(limit);
 
-    console.log(`Full-text search returned ${results.length} results`);
-
-    return results.map(result => ({
+    const searchResults = results.map(result => ({
       id: result.id,
       documentID: result.documentId,
       content: result.content,
@@ -346,9 +475,29 @@ async function performFullTextSearch(
         chunkIndex: result.chunkIndex,
       },
     }));
+
+    const duration = timer.stop();
+    logger.info("Full-text search completed successfully", {
+      query: query.substring(0, 100),
+      sanitizedQuery: sanitizedQuery.substring(0, 100),
+      resultCount: searchResults.length,
+      duration,
+      avgScore: searchResults.length > 0 ? 
+        searchResults.reduce((sum, r) => sum + r.score, 0) / searchResults.length : 0,
+      maxScore: searchResults.length > 0 ? Math.max(...searchResults.map(r => r.score)) : 0
+    });
+
+    return searchResults;
     
   } catch (error) {
-    console.error("Error performing full-text search:", error);
+    const duration = timer.stop();
+    logger.error("Full-text search failed", {
+      query: query.substring(0, 100),
+      userID,
+      documentIDs: documentIDs?.length || 0,
+      limit,
+      duration
+    }, error instanceof Error ? error : undefined);
     throw new Error(`Full-text search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -361,8 +510,16 @@ async function performVectorSearch(
   limit: number = 20,
   threshold: number = 0.7
 ): Promise<SearchResult[]> {
+  const timer = logger.startTimer('vector-search');
+  
   try {
-    console.log(`Performing vector search with threshold ${threshold}, limit ${limit}`);
+    logger.info("Starting vector similarity search", {
+      userID,
+      documentIDs: documentIDs?.length || 0,
+      limit,
+      threshold,
+      embeddingDimensions: queryEmbedding.length
+    });
     
     // Build base query
     let baseQuery = db
@@ -386,6 +543,9 @@ async function performVectorSearch(
     // Add document ID filtering if specified
     if (documentIDs && documentIDs.length > 0) {
       baseQuery = baseQuery.where(sql`${documentChunks.documentId} = ANY(${documentIDs})`);
+      logger.debug("Applied document ID filtering", {
+        documentCount: documentIDs.length
+      });
     }
 
     // Add similarity threshold and ordering
@@ -394,9 +554,7 @@ async function performVectorSearch(
       .orderBy(desc(sql`1 - (${documentChunks.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)`))
       .limit(limit);
 
-    console.log(`Vector search returned ${results.length} results`);
-
-    return results.map(result => ({
+    const searchResults = results.map(result => ({
       id: result.id,
       documentID: result.documentId,
       content: result.content,
@@ -407,9 +565,29 @@ async function performVectorSearch(
         chunkIndex: result.chunkIndex,
       },
     }));
+
+    const duration = timer.stop();
+    logger.info("Vector search completed successfully", {
+      resultCount: searchResults.length,
+      duration,
+      threshold,
+      avgSimilarity: searchResults.length > 0 ? 
+        searchResults.reduce((sum, r) => sum + r.score, 0) / searchResults.length : 0,
+      maxSimilarity: searchResults.length > 0 ? Math.max(...searchResults.map(r => r.score)) : 0,
+      minSimilarity: searchResults.length > 0 ? Math.min(...searchResults.map(r => r.score)) : 0
+    });
+
+    return searchResults;
     
   } catch (error) {
-    console.error("Error performing vector search:", error);
+    const duration = timer.stop();
+    logger.error("Vector search failed", {
+      userID,
+      documentIDs: documentIDs?.length || 0,
+      limit,
+      threshold,
+      duration
+    }, error instanceof Error ? error : undefined);
     throw new Error(`Vector search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -450,19 +628,75 @@ function combineSearchResults(
   return Array.from(resultMap.values()).sort((a, b) => b.score - a.score);
 }
 
+// Generate cache key for search requests
+function generateSearchCacheKey(req: SearchRequest, searchType: string): string {
+  const keyParts = [
+    'search',
+    searchType,
+    req.userID,
+    req.query,
+    req.limit || 20,
+    req.threshold || 0.7,
+    req.enableReranking || true,
+    req.documentIDs?.sort().join(',') || 'all'
+  ];
+  return keyParts.join(':');
+}
+
 // Hybrid search endpoint (vector + full-text)
 export const hybridSearch = api(
   { expose: true, method: "POST", path: "/search/hybrid" },
   async (req: SearchRequest): Promise<SearchResponse> => {
+    const timer = logger.startTimer('hybrid-search-request');
     const startTime = Date.now();
 
     try {
       // Validate request
       const validatedReq = SearchRequestSchema.parse(req);
       
-      console.log(`Hybrid search request: "${validatedReq.query}" for user ${validatedReq.userID}`);
+      // Track search request metrics
+      MetricHelpers.trackSearchRequest('hybrid', validatedReq.enableReranking || false);
+      
+      logger.info("Hybrid search request received", {
+        query: validatedReq.query.substring(0, 100),
+        userID: validatedReq.userID,
+        documentIDs: validatedReq.documentIDs?.length || 0,
+        limit: validatedReq.limit,
+        threshold: validatedReq.threshold,
+        enableReranking: validatedReq.enableReranking
+      });
+      
+      // Try to get cached results first
+      const cacheKey = generateSearchCacheKey(validatedReq, 'hybrid');
+      try {
+        const cachedResponse = await searchCache.get<SearchResponse>(cacheKey);
+        if (cachedResponse) {
+          const duration = timer.stop();
+          logger.info("Cache hit for hybrid search", {
+            query: validatedReq.query.substring(0, 100),
+            resultCount: cachedResponse.results.length,
+            duration
+          });
+          MetricHelpers.trackCacheHit('search', 'L1');
+          return {
+            ...cachedResponse,
+            processingTime: Date.now() - startTime // Update processing time
+          };
+        } else {
+          MetricHelpers.trackCacheMiss('search', 'L1');
+        }
+      } catch (cacheError) {
+        logger.warn('Search cache retrieval failed, proceeding with search', {
+          query: validatedReq.query.substring(0, 100)
+        }, cacheError instanceof Error ? cacheError : undefined);
+        MetricHelpers.trackCacheMiss('search', 'L1');
+      }
       
       // Perform both vector and full-text searches in parallel
+      logger.info("Starting parallel vector and full-text searches", {
+        query: validatedReq.query.substring(0, 100)
+      });
+
       const [queryEmbedding, fullTextResults] = await Promise.all([
         generateQueryEmbedding(validatedReq.query),
         performFullTextSearch(
@@ -482,11 +716,26 @@ export const hybridSearch = api(
         validatedReq.threshold
       );
       
+      logger.info("Search phases completed", {
+        vectorResultCount: vectorResults.length,
+        fullTextResultCount: fullTextResults.length,
+        query: validatedReq.query.substring(0, 100)
+      });
+
       // Combine results with weighted scoring
       let combinedResults = combineSearchResults(vectorResults, fullTextResults);
       
+      logger.debug("Results combined", {
+        combinedResultCount: combinedResults.length,
+        query: validatedReq.query.substring(0, 100)
+      });
+
       // Apply Cohere reranking to improve relevance if enabled
       if (validatedReq.enableReranking && combinedResults.length > 1) {
+        logger.info("Applying Cohere reranking", {
+          inputResults: combinedResults.length,
+          query: validatedReq.query.substring(0, 100)
+        });
         combinedResults = await rerankWithCohere(
           validatedReq.query,
           combinedResults,
@@ -495,23 +744,62 @@ export const hybridSearch = api(
       } else {
         // Just limit results if not reranking
         combinedResults = combinedResults.slice(0, validatedReq.limit);
+        logger.debug("Skipping reranking, limiting results", {
+          finalCount: combinedResults.length,
+          reranking: validatedReq.enableReranking
+        });
       }
       
       const finalResults = combinedResults;
-
       const processingTime = Date.now() - startTime;
-      console.log(`Hybrid search completed in ${processingTime}ms, found ${finalResults.length} results (${vectorResults.length} vector, ${fullTextResults.length} full-text)`);
+      const duration = timer.stop();
 
-      return {
+      // Track search performance metrics
+      MetricHelpers.trackSearchDuration(processingTime, 'hybrid', validatedReq.enableReranking || false);
+
+      logger.info("Hybrid search completed successfully", {
+        query: validatedReq.query.substring(0, 100),
+        finalResultCount: finalResults.length,
+        vectorResultCount: vectorResults.length,
+        fullTextResultCount: fullTextResults.length,
+        processingTime,
+        duration,
+        enableReranking: validatedReq.enableReranking,
+        avgScore: finalResults.length > 0 ? 
+          finalResults.reduce((sum, r) => sum + r.score, 0) / finalResults.length : 0
+      });
+
+      const response: SearchResponse = {
         results: finalResults,
         totalFound: finalResults.length,
         query: validatedReq.query,
         processingTime,
         searchType: "hybrid",
       };
+
+      // Cache the response for future requests (5 minutes TTL)
+      try {
+        await searchCache.set(cacheKey, response, 300000);
+        logger.debug("Successfully cached hybrid search results", {
+          query: validatedReq.query.substring(0, 100),
+          ttl: 300000
+        });
+      } catch (cacheError) {
+        logger.warn('Failed to cache hybrid search results', {
+          query: validatedReq.query.substring(0, 100)
+        }, cacheError instanceof Error ? cacheError : undefined);
+      }
+
+      return response;
       
     } catch (error) {
-      console.error("Hybrid search error:", error);
+      const duration = timer.stop();
+      logger.error("Hybrid search failed", {
+        query: req.query?.substring(0, 100),
+        userID: req.userID,
+        duration
+      }, error instanceof Error ? error : undefined);
+      recordError('search', 'SEARCH_FAILED', error instanceof Error ? error.message : 'Unknown error');
       throw new Error(`Hybrid search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -521,13 +809,22 @@ export const hybridSearch = api(
 export const vectorSearch = api(
   { expose: true, method: "POST", path: "/search/vector" },
   async (req: SearchRequest): Promise<SearchResponse> => {
+    const timer = logger.startTimer('vector-search-request');
     const startTime = Date.now();
 
     try {
       // Validate request
       const validatedReq = SearchRequestSchema.parse(req);
       
-      console.log(`Vector search request: "${validatedReq.query}" for user ${validatedReq.userID}`);
+      MetricHelpers.trackSearchRequest('vector', validatedReq.enableReranking || false);
+      
+      logger.info("Vector search request received", {
+        query: validatedReq.query.substring(0, 100),
+        userID: validatedReq.userID,
+        threshold: validatedReq.threshold,
+        limit: validatedReq.limit,
+        enableReranking: validatedReq.enableReranking
+      });
       
       // Generate query embedding
       const queryEmbedding = await generateQueryEmbedding(validatedReq.query);
@@ -543,11 +840,27 @@ export const vectorSearch = api(
 
       // Apply reranking if enabled
       if (validatedReq.enableReranking && results.length > 1) {
+        logger.info("Applying reranking to vector search results", {
+          inputResults: results.length,
+          query: validatedReq.query.substring(0, 100)
+        });
         results = await rerankWithCohere(validatedReq.query, results, validatedReq.limit);
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`Vector search completed in ${processingTime}ms, found ${results.length} results`);
+      const duration = timer.stop();
+
+      MetricHelpers.trackSearchDuration(processingTime, 'vector', validatedReq.enableReranking || false);
+
+      logger.info("Vector search completed successfully", {
+        query: validatedReq.query.substring(0, 100),
+        resultCount: results.length,
+        processingTime,
+        duration,
+        enableReranking: validatedReq.enableReranking,
+        avgScore: results.length > 0 ? 
+          results.reduce((sum, r) => sum + r.score, 0) / results.length : 0
+      });
 
       return {
         results,
@@ -558,7 +871,13 @@ export const vectorSearch = api(
       };
       
     } catch (error) {
-      console.error("Vector search error:", error);
+      const duration = timer.stop();
+      logger.error("Vector search failed", {
+        query: req.query?.substring(0, 100),
+        userID: req.userID,
+        duration
+      }, error instanceof Error ? error : undefined);
+      recordError('search', 'VECTOR_SEARCH_FAILED', error instanceof Error ? error.message : 'Unknown error');
       throw new Error(`Vector search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -568,13 +887,21 @@ export const vectorSearch = api(
 export const fullTextSearch = api(
   { expose: true, method: "POST", path: "/search/fulltext" },
   async (req: SearchRequest): Promise<SearchResponse> => {
+    const timer = logger.startTimer('fulltext-search-request');
     const startTime = Date.now();
 
     try {
       // Validate request
       const validatedReq = SearchRequestSchema.parse(req);
       
-      console.log(`Full-text search request: "${validatedReq.query}" for user ${validatedReq.userID}`);
+      MetricHelpers.trackSearchRequest('fulltext', false);
+      
+      logger.info("Full-text search request received", {
+        query: validatedReq.query.substring(0, 100),
+        userID: validatedReq.userID,
+        limit: validatedReq.limit,
+        documentIDs: validatedReq.documentIDs?.length || 0
+      });
       
       // Perform full-text search using PostgreSQL FTS
       const results = await performFullTextSearch(
@@ -585,7 +912,18 @@ export const fullTextSearch = api(
       );
 
       const processingTime = Date.now() - startTime;
-      console.log(`Full-text search completed in ${processingTime}ms, found ${results.length} results`);
+      const duration = timer.stop();
+
+      MetricHelpers.trackSearchDuration(processingTime, 'fulltext', false);
+
+      logger.info("Full-text search completed successfully", {
+        query: validatedReq.query.substring(0, 100),
+        resultCount: results.length,
+        processingTime,
+        duration,
+        avgScore: results.length > 0 ? 
+          results.reduce((sum, r) => sum + r.score, 0) / results.length : 0
+      });
 
       return {
         results,
@@ -596,7 +934,13 @@ export const fullTextSearch = api(
       };
       
     } catch (error) {
-      console.error("Full-text search error:", error);
+      const duration = timer.stop();
+      logger.error("Full-text search failed", {
+        query: req.query?.substring(0, 100),
+        userID: req.userID,
+        duration
+      }, error instanceof Error ? error : undefined);
+      recordError('search', 'FULLTEXT_SEARCH_FAILED', error instanceof Error ? error.message : 'Unknown error');
       throw new Error(`Full-text search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -708,14 +1052,14 @@ async function getRelatedChunks(
         content: documentChunks.content,
         chunkIndex: documentChunks.chunkIndex,
         metadata: documentChunks.metadata,
-        documentID: documentChunks.documentID,
+        documentID: documentChunks.documentId,
       })
       .from(documentChunks)
-      .innerJoin(documents, eq(documentChunks.documentID, documents.id))
+      .innerJoin(documents, eq(documentChunks.documentId, documents.id))
       .where(
         and(
-          eq(documentChunks.documentID, result.documentID),
-          eq(documents.userID, userID),
+          eq(documentChunks.documentId, result.documentID),
+          eq(documents.userId, userID),
           // Find chunks within radius, excluding the current chunk
           sql`${documentChunks.chunkIndex} BETWEEN ${result.metadata.chunkIndex - radius} AND ${result.metadata.chunkIndex + radius}`,
           sql`${documentChunks.id} != ${result.id}`
@@ -746,15 +1090,18 @@ async function getDocumentMetadata(documentID: string, userID: string): Promise<
   try {
     const doc = await db
       .select({
-        title: documents.title,
         filename: documents.filename,
+        originalName: documents.originalName,
         uploadedAt: documents.uploadedAt,
         fileSize: documents.fileSize,
-        mimeType: documents.mimeType,
+        contentType: documents.contentType,
+        status: documents.status,
+        processedAt: documents.processedAt,
+        chunkCount: documents.chunkCount,
         metadata: documents.metadata,
       })
       .from(documents)
-      .where(and(eq(documents.id, documentID), eq(documents.userID, userID)))
+      .where(and(eq(documents.id, documentID), eq(documents.userId, userID)))
       .limit(1);
 
     if (doc.length === 0) {
@@ -762,11 +1109,14 @@ async function getDocumentMetadata(documentID: string, userID: string): Promise<
     }
 
     return {
-      title: doc[0].title,
       filename: doc[0].filename,
+      originalName: doc[0].originalName,
       uploadedAt: doc[0].uploadedAt,
       fileSize: doc[0].fileSize,
-      mimeType: doc[0].mimeType,
+      contentType: doc[0].contentType,
+      status: doc[0].status,
+      processedAt: doc[0].processedAt,
+      chunkCount: doc[0].chunkCount,
       ...doc[0].metadata as Record<string, any>,
     };
 
@@ -776,26 +1126,107 @@ async function getDocumentMetadata(documentID: string, userID: string): Promise<
   }
 }
 
+// Hybrid search combining vector and full-text search
+async function performHybridSearch(
+  query: string,
+  userID: string,
+  documentIDs?: string[],
+  limit: number = 20,
+  threshold: number = 0.7,
+  vectorWeight: number = 0.7,
+  ftsWeight: number = 0.3
+): Promise<SearchResult[]> {
+  try {
+    console.log(`Performing hybrid search: "${query}" for user ${userID}`);
+
+    // Generate embedding for vector search
+    const queryEmbedding = await generateQueryEmbedding(query);
+
+    // Perform both searches in parallel
+    const [vectorResults, ftsResults] = await Promise.all([
+      performVectorSearch(queryEmbedding, userID, documentIDs, limit * 2, threshold),
+      performFullTextSearch(query, userID, documentIDs, limit * 2)
+    ]);
+
+    console.log(`Vector search found ${vectorResults.length} results, FTS found ${ftsResults.length} results`);
+
+    // Combine and deduplicate results
+    const combinedResults = new Map<string, SearchResult>();
+
+    // Add vector results with weighted scores
+    for (const result of vectorResults) {
+      combinedResults.set(result.id, {
+        ...result,
+        score: result.score * vectorWeight
+      });
+    }
+
+    // Add FTS results, combining scores for duplicates
+    for (const result of ftsResults) {
+      const existing = combinedResults.get(result.id);
+      if (existing) {
+        // Combine scores from both search types
+        existing.score = existing.score + (result.score * ftsWeight);
+      } else {
+        combinedResults.set(result.id, {
+          ...result,
+          score: result.score * ftsWeight
+        });
+      }
+    }
+
+    // Convert to array, sort by combined score, and limit results
+    const finalResults = Array.from(combinedResults.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    console.log(`Hybrid search combined to ${finalResults.length} final results`);
+    return finalResults;
+
+  } catch (error) {
+    console.error("Hybrid search error:", error);
+    throw new Error(`Hybrid search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
 // Enhanced search endpoint with filtering and context expansion
 export const enhancedSearch = api(
   { expose: true, method: "POST", path: "/search/enhanced" },
   async (req: ExpandedSearchRequest): Promise<ExpandedSearchResponse> => {
+    const timer = logger.startTimer('enhanced-search-request');
     const startTime = Date.now();
 
     try {
       // Validate request
       const validatedReq = ExpandedSearchRequestSchema.parse(req);
       
-      console.log(`Enhanced search request: "${validatedReq.query}" for user ${validatedReq.userID}`);
+      MetricHelpers.trackSearchRequest('enhanced', validatedReq.enableReranking || false);
+      
+      logger.info("Enhanced search request received", {
+        query: validatedReq.query.substring(0, 100),
+        userID: validatedReq.userID,
+        searchType: validatedReq.searchType || "hybrid",
+        enableReranking: validatedReq.enableReranking,
+        hasFilters: !!validatedReq.filters,
+        hasContextExpansion: !!validatedReq.contextExpansion,
+        limit: validatedReq.limit
+      });
       
       // Perform base search (default to hybrid)
       const searchType = validatedReq.searchType || "hybrid";
       let results: SearchResult[];
 
+      logger.info("Starting base search", {
+        searchType,
+        query: validatedReq.query.substring(0, 100)
+      });
+
       switch (searchType) {
         case "vector":
+          // Generate embedding for the query first
+          const queryEmbedding = await generateQueryEmbedding(validatedReq.query);
           results = await performVectorSearch(
-            validatedReq.query,
+            queryEmbedding,
             validatedReq.userID,
             validatedReq.documentIDs,
             validatedReq.limit,
@@ -822,30 +1253,71 @@ export const enhancedSearch = api(
           break;
       }
 
-      console.log(`Base search found ${results.length} results`);
+      logger.info("Base search completed", {
+        searchType,
+        resultCount: results.length,
+        query: validatedReq.query.substring(0, 100)
+      });
 
       // Apply reranking if enabled
       if (validatedReq.enableReranking) {
+        logger.info("Applying reranking to enhanced search results", {
+          inputResults: results.length,
+          query: validatedReq.query.substring(0, 100)
+        });
         results = await rerankWithCohere(validatedReq.query, results);
-        console.log(`Reranking completed, ${results.length} results after reranking`);
+        logger.info("Reranking completed", {
+          resultCount: results.length,
+          query: validatedReq.query.substring(0, 100)
+        });
       }
 
       // Apply filters
       if (validatedReq.filters) {
+        const preFilterCount = results.length;
         results = await applyFilters(results, validatedReq.filters);
-        console.log(`Filtering completed, ${results.length} results after filtering`);
+        logger.info("Filtering completed", {
+          preFilterCount,
+          postFilterCount: results.length,
+          filtersApplied: Object.keys(validatedReq.filters).length,
+          query: validatedReq.query.substring(0, 100)
+        });
       }
 
       // Apply context expansion
       let expandedResultsCount = 0;
       if (validatedReq.contextExpansion) {
+        logger.info("Starting context expansion", {
+          inputResults: results.length,
+          includeRelatedChunks: validatedReq.contextExpansion.includeRelatedChunks,
+          maxRelatedChunks: validatedReq.contextExpansion.maxRelatedChunks,
+          query: validatedReq.query.substring(0, 100)
+        });
         results = await expandContext(results, validatedReq.contextExpansion, validatedReq.userID);
         expandedResultsCount = results.reduce((sum, r) => sum + (r.relatedChunks?.length || 0), 0);
-        console.log(`Context expansion completed, added ${expandedResultsCount} related chunks`);
+        logger.info("Context expansion completed", {
+          expandedChunks: expandedResultsCount,
+          finalResults: results.length,
+          query: validatedReq.query.substring(0, 100)
+        });
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`Enhanced search completed in ${processingTime}ms, final result count: ${results.length}`);
+      const duration = timer.stop();
+
+      MetricHelpers.trackSearchDuration(processingTime, 'enhanced', validatedReq.enableReranking || false);
+
+      logger.info("Enhanced search completed successfully", {
+        query: validatedReq.query.substring(0, 100),
+        searchType,
+        finalResultCount: results.length,
+        expandedChunks: expandedResultsCount,
+        processingTime,
+        duration,
+        enableReranking: validatedReq.enableReranking,
+        hasFilters: !!validatedReq.filters,
+        hasContextExpansion: !!validatedReq.contextExpansion
+      });
 
       return {
         results,
@@ -857,7 +1329,14 @@ export const enhancedSearch = api(
       };
       
     } catch (error) {
-      console.error("Enhanced search error:", error);
+      const duration = timer.stop();
+      logger.error("Enhanced search failed", {
+        query: req.query?.substring(0, 100),
+        userID: req.userID,
+        searchType: req.searchType,
+        duration
+      }, error instanceof Error ? error : undefined);
+      recordError('search', 'ENHANCED_SEARCH_FAILED', error instanceof Error ? error.message : 'Unknown error');
       throw new Error(`Enhanced search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

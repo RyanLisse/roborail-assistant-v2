@@ -8,6 +8,7 @@ import {
   vector,
   index
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 // Zod schemas for validation
@@ -36,6 +37,9 @@ export const documents = pgTable(
     userIdIdx: index("documents_user_id_idx").on(table.userId),
     statusIdx: index("documents_status_idx").on(table.status),
     uploadedAtIdx: index("documents_uploaded_at_idx").on(table.uploadedAt),
+    filenameLowerIdx: index("documents_filename_lower_idx").on(sql`lower(${table.filename})`),
+    originalNameLowerIdx: index("documents_original_name_lower_idx").on(sql`lower(${table.originalName})`),
+    metadataTitleLowerIdx: index("documents_metadata_title_lower_idx").on(sql`lower(metadata->>'title')`),
   })
 );
 
@@ -75,6 +79,7 @@ export const conversations = pgTable(
   (table) => ({
     userIdIdx: index("conversations_user_id_idx").on(table.userId),
     updatedAtIdx: index("conversations_updated_at_idx").on(table.updatedAt),
+    userIdUpdatedAtIdx: index("conversations_user_id_updated_at_idx").on(table.userId, table.updatedAt),
   })
 );
 
@@ -147,106 +152,6 @@ export const documentProcessingStatus = pgTable(
     updatedAtIdx: index("processing_status_updated_at_idx").on(table.updatedAt),
   })
 );
-
-// Type inference for TypeScript
-export type Document = typeof documents.$inferSelect;
-export type NewDocument = typeof documents.$inferInsert;
-
-export type DocumentChunk = typeof documentChunks.$inferSelect;
-export type NewDocumentChunk = typeof documentChunks.$inferInsert;
-
-export type Conversation = typeof conversations.$inferSelect;
-export type NewConversation = typeof conversations.$inferInsert;
-
-export type ConversationMessage = typeof conversationMessages.$inferSelect;
-export type NewConversationMessage = typeof conversationMessages.$inferInsert;
-
-export type DocumentProcessingStatus = typeof documentProcessingStatus.$inferSelect;
-export type NewDocumentProcessingStatus = typeof documentProcessingStatus.$inferInsert;
-
-export type DocumentCollection = typeof documentCollections.$inferSelect;
-export type NewDocumentCollection = typeof documentCollections.$inferInsert;
-
-export type CollectionDocument = typeof collectionDocuments.$inferSelect;
-export type NewCollectionDocument = typeof collectionDocuments.$inferInsert;
-
-export type DocumentTag = typeof documentTags.$inferSelect;
-export type NewDocumentTag = typeof documentTags.$inferInsert;
-
-// Types for saved filters (commented out due to Encore compilation issue)
-// export type SavedFilter = typeof savedFilters.$inferSelect;
-export type NewSavedFilter = typeof savedFilters.$inferInsert;
-
-// Validation schemas using Zod
-export const createDocumentSchema = z.object({
-  id: z.string().min(1),
-  userId: z.string().min(1),
-  filename: z.string().min(1),
-  originalName: z.string().min(1),
-  contentType: z.string().min(1),
-  fileSize: z.number().positive(),
-  status: DocumentStatus,
-  metadata: z.record(z.any()).default({}),
-});
-
-export const createDocumentChunkSchema = z.object({
-  id: z.string().min(1),
-  documentId: z.string().min(1),
-  content: z.string().min(1),
-  embedding: z.array(z.number()).length(1024),
-  chunkIndex: z.number().int().min(0),
-  pageNumber: z.number().int().positive().optional(),
-  tokenCount: z.number().int().positive(),
-  metadata: z.record(z.any()).default({}),
-});
-
-export const createConversationSchema = z.object({
-  id: z.string().min(1),
-  userId: z.string().min(1),
-  title: z.string().min(1),
-});
-
-export const createMessageSchema = z.object({
-  id: z.string().min(1),
-  conversationId: z.string().min(1),
-  role: MessageRole,
-  content: z.string().min(1),
-  citations: z.array(z.object({
-    documentId: z.string(),
-    filename: z.string(),
-    pageNumber: z.number().int().positive().optional(),
-    chunkContent: z.string(),
-    relevanceScore: z.number().min(0).max(1),
-  })).default([]),
-});
-
-export const createProcessingStatusSchema = z.object({
-  id: z.string().min(1),
-  documentId: z.string().min(1),
-  userId: z.string().min(1),
-  currentStage: ProcessingStage,
-  overallStatus: ProcessingStatus,
-  stages: z.record(z.object({
-    status: z.enum(["pending", "in_progress", "completed", "failed"]),
-    startedAt: z.string().optional(),
-    completedAt: z.string().optional(),
-    errorMessage: z.string().optional(),
-    retryCount: z.number().int().min(0).optional(),
-    estimatedDuration: z.number().positive().optional(),
-    actualDuration: z.number().positive().optional(),
-  })),
-  metadata: z.object({
-    totalSize: z.number().positive().optional(),
-    estimatedDuration: z.number().positive().optional(),
-    chunkCount: z.number().int().min(0).optional(),
-    embeddingDimensions: z.number().int().positive().optional(),
-    indexingMethod: z.string().optional(),
-  }).default({}),
-  errorMessage: z.string().optional(),
-  retryCount: z.number().int().min(0).default(0),
-  maxRetries: z.number().int().min(0).default(3),
-  progressPercentage: z.number().int().min(0).max(100).default(0),
-});
 
 // Document collections table - for organizing documents
 export const documentCollections = pgTable(
@@ -330,3 +235,102 @@ export const savedFilters = pgTable(
     useCountIdx: index("saved_filters_use_count_idx").on(table.useCount),
   })
 );
+
+// Type inference for TypeScript
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+
+export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type NewDocumentChunk = typeof documentChunks.$inferInsert;
+
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+export type NewConversationMessage = typeof conversationMessages.$inferInsert;
+
+export type DocumentProcessingStatus = typeof documentProcessingStatus.$inferSelect;
+export type NewDocumentProcessingStatus = typeof documentProcessingStatus.$inferInsert;
+
+export type DocumentCollection = typeof documentCollections.$inferSelect;
+export type NewDocumentCollection = typeof documentCollections.$inferInsert;
+
+export type CollectionDocument = typeof collectionDocuments.$inferSelect;
+export type NewCollectionDocument = typeof collectionDocuments.$inferInsert;
+
+export type DocumentTag = typeof documentTags.$inferSelect;
+export type NewDocumentTag = typeof documentTags.$inferInsert;
+
+export type SavedFilter = typeof savedFilters.$inferSelect;
+export type NewSavedFilter = typeof savedFilters.$inferInsert;
+
+// Validation schemas using Zod
+export const createDocumentSchema = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  filename: z.string().min(1),
+  originalName: z.string().min(1),
+  contentType: z.string().min(1),
+  fileSize: z.number().positive(),
+  status: DocumentStatus,
+  metadata: z.record(z.any()).default({}),
+});
+
+export const createDocumentChunkSchema = z.object({
+  id: z.string().min(1),
+  documentId: z.string().min(1),
+  content: z.string().min(1),
+  embedding: z.array(z.number()).length(1024),
+  chunkIndex: z.number().int().min(0),
+  pageNumber: z.number().int().positive().optional(),
+  tokenCount: z.number().int().positive(),
+  metadata: z.record(z.any()).default({}),
+});
+
+export const createConversationSchema = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  title: z.string().min(1),
+});
+
+export const createMessageSchema = z.object({
+  id: z.string().min(1),
+  conversationId: z.string().min(1),
+  role: MessageRole,
+  content: z.string().min(1),
+  citations: z.array(z.object({
+    documentId: z.string(),
+    filename: z.string(),
+    pageNumber: z.number().int().positive().optional(),
+    chunkContent: z.string(),
+    relevanceScore: z.number().min(0).max(1),
+  })).default([]),
+});
+
+export const createProcessingStatusSchema = z.object({
+  id: z.string().min(1),
+  documentId: z.string().min(1),
+  userId: z.string().min(1),
+  currentStage: ProcessingStage,
+  overallStatus: ProcessingStatus,
+  stages: z.record(z.object({
+    status: z.enum(["pending", "in_progress", "completed", "failed"]),
+    startedAt: z.string().optional(),
+    completedAt: z.string().optional(),
+    errorMessage: z.string().optional(),
+    retryCount: z.number().int().min(0).optional(),
+    estimatedDuration: z.number().positive().optional(),
+    actualDuration: z.number().positive().optional(),
+  })),
+  metadata: z.object({
+    totalSize: z.number().positive().optional(),
+    estimatedDuration: z.number().positive().optional(),
+    chunkCount: z.number().int().min(0).optional(),
+    embeddingDimensions: z.number().int().positive().optional(),
+    indexingMethod: z.string().optional(),
+  }).default({}),
+  errorMessage: z.string().optional(),
+  retryCount: z.number().int().min(0).default(0),
+  maxRetries: z.number().int().min(0).default(3),
+  progressPercentage: z.number().int().min(0).max(100).default(0),
+});

@@ -9,7 +9,7 @@ import { ChatSDKError } from "@/lib/errors";
 import { fetchWithErrorHandlers, fetcher, generateUUID } from "@/lib/utils";
 import { useChat } from "@ai-sdk/react";
 import type { Attachment, UIMessage } from "ai";
-import type { Session } from "next-auth";
+// Removed auth - using null session type
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
@@ -35,7 +35,7 @@ export function Chat({
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
   isReadonly: boolean;
-  session: Session;
+  session: null;
   autoResume: boolean;
 }) {
   const { mutate } = useSWRConfig();

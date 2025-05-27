@@ -1,6 +1,6 @@
 # Task ID: 7
 # Title: Develop LLM Service and Structured Prompting
-# Status: pending
+# Status: done
 # Dependencies: 1, 2, 4, 5, 6
 # Priority: high
 # Description: Implement LLMService as a Gemini API wrapper with structured prompting.
@@ -11,19 +11,19 @@ Wrap Google Gemini 2.5 Flash API. Implement structured prompts for RAG responses
 Test LLM API integration, prompt engineering, and citation parsing. Validate follow-up question generation.
 
 # Subtasks:
-## 1. Gemini API Integration and Wrapper Implementation [pending]
+## 1. Gemini API Integration and Wrapper Implementation [done]
 ### Dependencies: None
 ### Description: Implement a Python wrapper for the Gemini API to handle request formatting and response parsing
 ### Details:
 Set up REST API integration without authentication as it's not needed for this app. Implement compatibility with OpenAI libraries by updating endpoint URLs and request formats. Create a wrapper class that handles both direct Gemini API calls and OpenAI-compatible interfaces. Test with basic prompts to ensure proper connectivity and response handling.
 
-## 2. Structured Prompt Engineering for RAG Responses [pending]
+## 2. Structured Prompt Engineering for RAG Responses [done]
 ### Dependencies: 7.1
 ### Description: Design and implement structured prompts optimized for retrieval-augmented generation (RAG) workflows
 ### Details:
 Create prompt templates with proper formatting for RAG contexts. Implement structured output parsing using BaseModel classes to ensure consistent response formats. Design function calling capabilities to enable tool use within the RAG workflow. Test prompt effectiveness with various document types and query patterns.
 
-## 3. Citation Parsing and Follow-up Generation Logic [pending]
+## 3. Citation Parsing and Follow-up Generation Logic [done]
 ### Dependencies: 7.1, 7.2
 ### Description: Develop logic to extract citations from LLM responses and generate appropriate follow-up queries
 ### Details:

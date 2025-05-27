@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, beforeAll, afterEach } from 'vitest';
 
 // Mock implementations for testing vector search functionality
 interface MockSearchRequest {

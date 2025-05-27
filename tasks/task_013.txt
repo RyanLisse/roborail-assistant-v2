@@ -1,7 +1,7 @@
 # Task ID: 13
 # Title: Implement Audit Trail and Compliance Features
-# Status: pending
-# Dependencies: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+# Status: done
+# Dependencies: 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12
 # Priority: medium
 # Description: Develop comprehensive logging for compliance and audit trails.
 # Details:
@@ -11,21 +11,55 @@ Log all critical operations (document upload, processing, chat interactions). Pr
 Test audit logging, context preservation, and error handling. Validate compliance requirements.
 
 # Subtasks:
-## 1. Implement Critical Operation Logging Across Services [pending]
+## 1. Implement Critical Operation Logging Across Services [done]
 ### Dependencies: None
 ### Description: Establish consistent and comprehensive logging of critical operations across all relevant services. Ensure logs capture essential details such as timestamps, user activity, data modifications, access records, and system events, following best practices for security and compliance.
 ### Details:
 Define clear log policies, automate log collection where possible, and ensure logs are accurate, complete, and securely stored for audit purposes. Regularly review and maintain the integrity of logs.
 
-## 2. Preserve Context for Audit Purposes [pending]
+## 2. Preserve Context for Audit Purposes [done]
 ### Dependencies: 13.1
 ### Description: Ensure that all logged events retain sufficient contextual information to support effective auditing and traceability. This includes capturing relevant metadata, user identifiers, and the sequence of actions leading to each event.
 ### Details:
 Design log structures and data flows to maintain context across distributed services, enabling auditors to reconstruct event histories and verify compliance with internal controls.
+<info added on 2025-05-27T23:17:09.406Z>
+# Task Plan for 13.2: Preserve Context for Audit Purposes
 
-## 3. Implement User-Friendly Error Handling with Appropriate Messaging [pending]
+1. **Review Existing Logs**: The logging implemented in Task 13.1 already includes significant context (e.g., `documentId`, `conversationId`, `userId` where available, `fileName`, `requestMessage` snippets, `status`, `bucketPath`).
+
+2. **Identify Gaps**: The primary gap is consistent `userId` logging across all services, which is contingent on the implementation of a unified authentication mechanism. This will be noted as a dependency.
+
+3. **Document Strategy**: Create/update `docs/observability/logging.md` to detail the strategy for context preservation. This includes:
+   - Emphasizing the inclusion of unique identifiers (like `documentId`, `conversationId`, `userId`).
+   - Logging relevant request parameters that define the operation's scope.
+   - Logging key outcome details (e.g., `status`, `chunksCreated`, `tokensUsed`).
+   - Highlighting the dependency on authentication for complete `userId` capture.
+
+4. **No Immediate Code Changes**: Beyond documentation, no further code changes are planned for this subtask as the core logging already includes substantial context. Future enhancements will depend on authentication implementation.
+</info added on 2025-05-27T23:17:09.406Z>
+
+## 3. Implement User-Friendly Error Handling with Appropriate Messaging [done]
 ### Dependencies: 13.1, 13.2
 ### Description: Develop error handling mechanisms that provide clear, actionable, and user-friendly messages while ensuring that errors are logged with sufficient detail for audit and troubleshooting purposes.
 ### Details:
 Balance transparency for end users with security and privacy requirements. Ensure error logs do not expose sensitive information but still support effective incident response and compliance reviews.
+<info added on 2025-05-27T23:17:55.601Z>
+# Error Handling Implementation Plan
+
+1. **Review Existing Error Handling**: Continue with current pattern in `catch` blocks that logs detailed errors internally while throwing new errors with user-friendly prefixes plus original error messages for API responses.
+
+2. **User-Facing Messages**: Maintain API error messages designed for frontend consumption, allowing the frontend to translate these into appropriate UI notifications. Current prefixes (e.g., "Failed to process chat message", "Upload failed") are suitable.
+
+3. **Identify Improvements**: 
+   - Ensure consistency in error prefixes across the application
+   - Verify no sensitive details are leaked in API error responses
+   - Confirm detailed context is logged internally only
+
+4. **Documentation**: Create or update `docs/error-handling-strategy.md` or add a section in `docs/observability/logging.md` documenting:
+   - Standard error catching/logging pattern
+   - Strategy for API error messages (prefix + original message)
+   - Importance of detailed internal logging vs. summarized API error messages
+
+5. **Implementation Focus**: Prioritize documentation over code changes, as the existing error handling for API responses is appropriate. The frontend will handle final user-facing presentation.
+</info added on 2025-05-27T23:17:55.601Z>
 

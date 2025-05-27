@@ -8,6 +8,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "22.15.21",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "8.32.1",
     "@typescript-eslint/parser": "8.32.1",
     "concurrently": "9.1.2",
@@ -17,17 +18,28 @@
     "lint-staged": "16.0.0",
     "prettier": "^3.0.0",
     "typescript": "5.8.3",
-    "vitest": "3.1.4"
+    "vitest": "^3.1.4"
   },
   "description": "Production-grade RAG chat application for knowledge workers",
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["rag", "chat", "ai", "typescript", "encore", "nextjs"],
+  "keywords": [
+    "rag",
+    "chat",
+    "ai",
+    "typescript",
+    "encore",
+    "nextjs"
+  ],
   "license": "MIT",
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,css}": ["biome check --write --no-errors-on-unmatched"],
-    "*.{md}": ["prettier --write"]
+    "*.{ts,tsx,js,jsx,json,css}": [
+      "biome check --write --no-errors-on-unmatched"
+    ],
+    "*.{md}": [
+      "prettier --write"
+    ]
   },
   "private": true,
   "scripts": {
@@ -36,8 +48,10 @@
     "dev:frontend": "cd frontend && bun run dev",
     "build": "bun run build:backend && bun run build:frontend",
     "build:backend": "cd backend && encore build",
-    "build:frontend": "cd frontend && bun run build",
-    "test": "bun run test:backend && bun run test:frontend",
+    "build:frontend": "cd frontend && npm install --legacy-peer-deps && npm run build:static",
+    "test": "bun run test:unit",
+    "test:unit": "vitest --config vitest.config.unit.ts",
+    "test:integration": "vitest --config vitest.config.integration.ts",
     "test:backend": "cd backend && bun test",
     "test:frontend": "cd frontend && bun run test",
     "test:watch": "vitest --watch",
@@ -58,8 +72,13 @@
     "db:migrate": "encore db migrate",
     "prepare": "husky install"
   },
-  "workspaces": ["backend", "frontend", "shared"],
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
   "dependencies": {
-    "nanoid": "^5.1.5"
+    "nanoid": "^5.1.5",
+    "uuid": "^11.1.0"
   }
 }

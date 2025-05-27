@@ -2,12 +2,11 @@ import { getDocumentById, saveSuggestions } from "@/lib/db/queries";
 import type { Suggestion } from "@/lib/db/schema";
 import { generateUUID } from "@/lib/utils";
 import { type DataStreamWriter, streamObject, tool } from "ai";
-import type { Session } from "next-auth";
 import { z } from "zod";
 import { myProvider } from "../providers";
 
 interface RequestSuggestionsProps {
-  session: Session;
+  session: any; // Simplified session type for unauthenticated use
   dataStream: DataStreamWriter;
 }
 
@@ -59,18 +58,15 @@ export const requestSuggestions = ({ session, dataStream }: RequestSuggestionsPr
         suggestions.push(suggestion);
       }
 
-      if (session.user?.id) {
-        const userId = session.user.id;
-
-        await saveSuggestions({
-          suggestions: suggestions.map((suggestion) => ({
-            ...suggestion,
-            userId,
-            createdAt: new Date(),
-            documentCreatedAt: document.createdAt,
-          })),
-        });
-      }
+      // Save suggestions for anonymous user
+      await saveSuggestions({
+        suggestions: suggestions.map((suggestion) => ({
+          ...suggestion,
+          userId: "anonymous",
+          createdAt: new Date(),
+          documentCreatedAt: document.createdAt,
+        })),
+      });
 
       return {
         id: documentId,

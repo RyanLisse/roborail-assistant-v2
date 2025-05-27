@@ -5,7 +5,7 @@
     "lib": ["ES2022"],
     "target": "ES2022",
     "module": "ES2022",
-    "types": ["node"],
+    "types": ["node", "vitest/globals"],
     "paths": {
       "~encore/*": ["./encore.gen/*"]
     },

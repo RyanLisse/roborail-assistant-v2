@@ -1,19 +1,14 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { SQLDatabase } from "encore.dev/storage/sqldb";
 import * as schema from "./schema";
 
-// Database connection configuration
-const dbUrl = process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/rag_db";
-
-// Create connection client
-export const client = postgres(dbUrl, {
-  max: 10, // Maximum connections in pool
-  idle_timeout: 20, // Close idle connections after 20 seconds
-  connect_timeout: 10, // Connection timeout in seconds
+// Encore SQL database instance
+const encoreDB = new SQLDatabase("rag_db", {
+  migrations: "./migrations",
 });
 
-// Create Drizzle instance with schema
-export const db = drizzle(client, { schema });
+// Create Drizzle instance with Encore database connection
+export const db = drizzle(encoreDB.connectionString, { schema });
 
 // Type-safe database instance
 export type Database = typeof db;

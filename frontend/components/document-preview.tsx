@@ -79,7 +79,6 @@ export function DocumentPreview({ isReadonly, result, args }: DocumentPreviewPro
           content: artifact.content,
           id: artifact.documentId,
           createdAt: new Date(),
-          userId: "noop",
         }
       : null;
 
@@ -128,7 +127,7 @@ const PureHitboxLayer = ({
   result,
   setArtifact,
 }: {
-  hitboxRef: React.RefObject<HTMLDivElement>;
+  hitboxRef: React.RefObject<HTMLDivElement | null>;
   result: any;
   setArtifact: (updaterFn: UIArtifact | ((currentArtifact: UIArtifact) => UIArtifact)) => void;
 }) => {

@@ -1,5 +1,3 @@
-import { type UserType, auth } from "@/app/(auth)/auth";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
@@ -11,7 +9,6 @@ import {
   createStreamId,
   deleteChatById,
   getChatById,
-  getMessageCountByUserId,
   getMessagesByChatId,
   getStreamIdsByChatId,
   saveChat,
@@ -69,22 +66,7 @@ export async function POST(request: Request) {
   try {
     const { id, message, selectedChatModel, selectedVisibilityType } = requestBody;
 
-    const session = await auth();
-
-    if (!session?.user) {
-      return new ChatSDKError("unauthorized:chat").toResponse();
-    }
-
-    const userType: UserType = session.user.type;
-
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
-    });
-
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError("rate_limit:chat").toResponse();
-    }
+    // Authentication removed - simplified for unauthenticated use
 
     const chat = await getChatById({ id });
 
@@ -95,14 +77,9 @@ export async function POST(request: Request) {
 
       await saveChat({
         id,
-        userId: session.user.id,
         title,
         visibility: selectedVisibilityType,
       });
-    } else {
-      if (chat.userId !== session.user.id) {
-        return new ChatSDKError("forbidden:chat").toResponse();
-      }
     }
 
     const previousMessages = await getMessagesByChatId({ id });
@@ -153,16 +130,15 @@ export async function POST(request: Request) {
           experimental_generateMessageId: generateUUID,
           tools: {
             getWeather,
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
+            createDocument: createDocument({ session: null, dataStream }),
+            updateDocument: updateDocument({ session: null, dataStream }),
             requestSuggestions: requestSuggestions({
-              session,
+              session: null,
               dataStream,
             }),
           },
           onFinish: async ({ response }) => {
-            if (session.user?.id) {
-              try {
+            try {
                 const assistantId = getTrailingMessageId({
                   messages: response.messages.filter((message) => message.role === "assistant"),
                 });
@@ -191,7 +167,6 @@ export async function POST(request: Request) {
               } catch (_) {
                 console.error("Failed to save chat");
               }
-            }
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
@@ -239,11 +214,7 @@ export async function GET(request: Request) {
     return new ChatSDKError("bad_request:api").toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError("unauthorized:chat").toResponse();
-  }
+  // Authentication removed - simplified for unauthenticated use
 
   let chat: Chat;
 
@@ -257,9 +228,7 @@ export async function GET(request: Request) {
     return new ChatSDKError("not_found:chat").toResponse();
   }
 
-  if (chat.visibility === "private" && chat.userId !== session.user.id) {
-    return new ChatSDKError("forbidden:chat").toResponse();
-  }
+  // Skip visibility check for simplified unauthenticated use
 
   const streamIds = await getStreamIdsByChatId({ chatId });
 
@@ -324,17 +293,11 @@ export async function DELETE(request: Request) {
     return new ChatSDKError("bad_request:api").toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError("unauthorized:chat").toResponse();
-  }
+  // Authentication removed - simplified for unauthenticated use
 
   const chat = await getChatById({ id });
 
-  if (chat.userId !== session.user.id) {
-    return new ChatSDKError("forbidden:chat").toResponse();
-  }
+  // Skip user ownership check for simplified unauthenticated use
 
   const deletedChat = await deleteChatById({ id });
 

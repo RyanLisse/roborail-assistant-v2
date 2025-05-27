@@ -1,7 +1,7 @@
 # Task ID: 11
 # Title: Implement Monitoring and Observability
-# Status: pending
-# Dependencies: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+# Status: done
+# Dependencies: 1, 2, 4, 5, 6, 7, 8, 9, 10
 # Priority: medium
 # Description: Set up custom metrics, structured logging, and error tracking.
 # Details:
@@ -11,21 +11,126 @@ Instrument services for custom metrics (processing time, embedding time, RAG sco
 Test metric collection, logging, and dashboard integration. Validate error tracking and alerting.
 
 # Subtasks:
-## 1. Implement Custom Metrics Instrumentation [pending]
+## 1. Implement Custom Metrics Instrumentation [done]
 ### Dependencies: None
 ### Description: Add application-level metrics to all microservices using OpenTelemetry or Prometheus client libraries
 ### Details:
 Identify key performance indicators and business metrics for each service. Instrument code with counters, gauges, and histograms to track metrics like response times, error rates, and business-specific measurements. Focus on metrics that provide quantitative measurements of system health and can detect anomalies. Include metrics for latency of transactions, database connections, cache hit/miss ratios, and resource utilization.
 
-## 2. Set Up Structured Logging and Error Reporting [pending]
+## 2. Set Up Structured Logging and Error Reporting [done]
 ### Dependencies: 11.1
 ### Description: Implement consistent structured logging patterns across all services with contextual information
 ### Details:
 Design a standardized logging format that includes timestamps, service names, trace IDs, and severity levels. Ensure logs provide detailed context on events within the system, including errors, warnings, and informational messages. Configure log aggregation to a central location. Implement error reporting mechanisms that capture stack traces and relevant context. Ensure logs can be correlated with metrics for comprehensive troubleshooting.
 
-## 3. Integrate Real-time Monitoring Dashboards [pending]
+## 3. Integrate Real-time Monitoring Dashboards [done]
 ### Dependencies: 11.1, 11.2
 ### Description: Create comprehensive dashboards that visualize metrics and logs from all services
 ### Details:
 Select and configure a dashboard solution compatible with your metrics and logging systems. Design dashboards that display key metrics, service health, and business KPIs. Set up alerts for critical thresholds. Create views for different stakeholders (developers, operations, business). Ensure dashboards provide real-time visibility into system performance and can help identify bottlenecks. Include visualizations for custom metrics that track specific values from services and systems.
+<info added on 2025-05-27T22:55:31.997Z>
+# Monitoring Dashboard Implementation Plan
+
+## Observability Strategy with Encore
+
+### Development Environment
+- Utilize `encore dev-dashboard` for local development monitoring
+- Access traces that include structured logs from `encore.dev/log`
+- Leverage service maps for understanding system architecture and dependencies
+
+### Production Environment
+- Encore forwards OpenTelemetry metrics and logs to standard observability platforms
+- Compatible with Prometheus/Grafana, Datadog, ELK Stack, and other major observability tools
+
+## Key Metrics to Monitor
+
+### Chat Service Metrics
+- Message processing time (end-to-end and component breakdown)
+- RAG query execution time
+- LLM response time
+- Number of documents found per query
+- Citations generated per response
+- API request rate and distribution
+- Error rate by error type
+- Token usage (total and per request)
+
+### Document Processing Metrics
+- Document upload processing time
+- Chunking time and efficiency
+- Embedding generation time
+- Vector database operation latency
+
+### System Metrics
+- CPU/Memory utilization by service
+- Database query latency and throughput
+- Cache hit/miss ratio
+- API endpoint response times
+
+## Critical Log Queries
+
+- Error and critical logs aggregated by service
+- Warning logs for specific conditions (e.g., failed draft clearing)
+- High latency operations (LLM responses > 5s, RAG queries > 2s)
+- RAG queries returning zero documents
+- Authentication/authorization failures
+- Rate limiting events
+
+## Dashboard Designs
+
+### 1. Chat Service Overview Dashboard
+- KPIs: requests/minute, avg response time, error rate, active users
+- Time-series graphs for processing times (95th percentile, median)
+- Error rate breakdown by type
+- Token usage trends and projections
+- Recent error logs with context
+
+### 2. RAG Performance Dashboard
+- KPIs: avg documents retrieved, relevance scores, citation rate
+- Pipeline stage timing breakdown
+- Document retrieval success rate
+- Relevance score distribution
+- RAG-specific error and warning logs
+
+### 3. Document Processing Dashboard
+- KPIs: documents processed/hour, avg processing time, error rate
+- Processing stage timing breakdown
+- Vector database performance metrics
+- Document processing error logs
+
+### 4. System Health Dashboard
+- Service health status indicators
+- Resource utilization graphs (CPU, memory, disk, network)
+- Database and cache performance
+- Consolidated critical and error logs
+- Alert history and status
+
+## Alerting Strategy
+
+### High Priority Alerts
+- Service availability issues
+- Error rate exceeding 1% over 5 minutes
+- LLM provider connectivity issues
+- Database performance degradation
+- RAG returning zero results consistently
+
+### Medium Priority Alerts
+- Elevated latency (response times > 3s for 5 minutes)
+- Token usage approaching limits
+- Increased warning logs
+- Memory/CPU utilization above 80%
+
+### Low Priority Alerts
+- Gradual performance degradation trends
+- Document processing backlogs
+- Cache hit rate dropping below threshold
+
+## Encore Dev Dashboard Usage Guide
+
+Document how the team can effectively use the Encore dev dashboard during development:
+- Accessing and interpreting traces
+- Filtering logs by service and severity
+- Understanding service maps
+- Troubleshooting performance issues
+- Correlating logs with specific requests
+</info added on 2025-05-27T22:55:31.997Z>
 

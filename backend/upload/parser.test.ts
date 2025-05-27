@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // Types for document parsing (copying from parser.ts for testing)
 interface ParseRequest {

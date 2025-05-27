@@ -5,6 +5,23 @@ import { z } from "zod";
 import { db } from "../db/connection";
 import { documents } from "../db/schema";
 import { eq } from "drizzle-orm";
+import { 
+  uploadToBucket, 
+  downloadFromBucket, 
+  deleteFromBucket, 
+  fileExistsInBucket,
+  getBucketFileMetadata,
+  generateBucketPath,
+  type BucketUploadRequest,
+  type BucketUploadResponse,
+  type BucketDownloadRequest,
+  type BucketDownloadResponse,
+  type BucketError
+} from "./storage";
+import log from "encore.dev/log";
+
+// Create a service-specific logger instance
+const logger = log.with({ service: "upload-service" });
 
 // Database connection (secret is handled by db/connection.ts)
 
@@ -172,40 +189,98 @@ export const uploadFile = api(
       // Generate unique document ID
       const documentId = generateDocumentId();
       
-      // Generate bucket path (for now, we'll simulate bucket storage)
-      const fileExtension = getFileExtension(request.contentType);
-      const bucketPath = `uploads/${documentId}${fileExtension}`;
+      logger.info("Received file upload request", {
+        fileName: request.fileName,
+        fileSize: request.fileSize,
+        contentType: request.contentType,
+        // userId: request.userId, // TODO: Add userId when authentication is implemented
+        metadata: request.metadata,
+      });
       
-      // TODO: Save file to Encore Bucket (next subtask)
-      // For now, we'll just simulate successful upload
-      console.log(`Would save file to bucket: ${bucketPath}`);
-      console.log(`File data length: ${request.fileData.length} bytes`);
+      // Generate bucket path using storage utility
+      const bucketPath = generateBucketPath(documentId, request.fileName);
       
-      // Save file metadata to database
+      // Upload file to Encore Bucket
+      const bucketUploadRequest: BucketUploadRequest = {
+        documentId,
+        fileName: request.fileName,
+        contentType: request.contentType,
+        fileData: request.fileData, // Base64 encoded string
+      };
+      
+      let uploadResult: BucketUploadResponse;
+      try {
+        uploadResult = await uploadToBucket(bucketUploadRequest);
+        console.log(`Successfully uploaded file to bucket: ${uploadResult.bucketPath}`);
+        logger.info("File successfully uploaded to bucket", {
+          documentId: documentId,
+          bucketPath: uploadResult.bucketPath,
+          fileSize: uploadResult.fileSize,
+        });
+      } catch (error) {
+        const bucketError = error as BucketError;
+        console.error(`Bucket upload failed: ${bucketError.message}`);
+        throw new Error(`Failed to store file: ${bucketError.message}`);
+      }
+      
+      // Save file metadata to database with actual bucket path and upload info
       await saveFileToDatabase(
         documentId,
         request.fileName,
-        request.fileSize,
+        uploadResult.fileSize, // Use actual file size from upload
         request.contentType,
-        bucketPath,
+        uploadResult.bucketPath, // Use actual bucket path from upload
         request.metadata
       );
+      
+      logger.info("File metadata successfully saved to database", {
+        documentId: documentId,
+        bucketPath: uploadResult.bucketPath,
+        userId: 'system', // TODO: Get from authentication
+      });
+      
+      // Trigger document processing asynchronously
+      triggerDocumentProcessing(documentId, uploadResult.bucketPath, request.contentType)
+        .catch(error => {
+          console.error(`Failed to trigger processing for document ${documentId}:`, error);
+        });
       
       // Return successful upload response
       const response: FileUploadResponse = {
         documentId,
         fileName: request.fileName,
-        fileSize: request.fileSize,
+        fileSize: uploadResult.fileSize,
         contentType: request.contentType,
         status: 'uploaded',
-        uploadedAt: new Date(),
-        bucketPath,
+        uploadedAt: uploadResult.uploadedAt,
+        bucketPath: uploadResult.bucketPath,
       };
       
+      logger.info("File upload process completed successfully", {
+        documentId: documentId,
+        fileName: response.fileName,
+        status: response.status,
+      });
+
       return response;
       
     } catch (error) {
       console.error('File upload error:', error);
+      const errorMessage = 'File upload failed';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          fileName: request.fileName,
+          fileSize: request.fileSize,
+          contentType: request.contentType,
+        });
+      } else {
+        logger.error(errorMessage, {
+          fileName: request.fileName,
+          fileSize: request.fileSize,
+          contentType: request.contentType,
+          error: error,
+        });
+      }
       throw new Error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -216,6 +291,10 @@ export const getUploadStatus = api(
   { expose: true, method: "GET", path: "/upload/status/:documentId" },
   async ({ documentId }: { documentId: string }): Promise<{ status: string; documentId: string }> => {
     try {
+      logger.info("Received request to get upload status", {
+        documentId: documentId,
+      });
+
       // Query database for document status
       const result = await db.select({
         status: documents.status,
@@ -232,11 +311,297 @@ export const getUploadStatus = api(
         status: result[0].status,
       };
       
+      logger.info("Successfully retrieved upload status", {
+        documentId: documentId,
+        status: result[0].status,
+      });
+      
     } catch (error) {
       console.error('Status check error:', error);
       throw new Error(`Status check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = 'Failed to get upload status';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          documentId: documentId,
+        });
+      } else {
+        logger.error(errorMessage, {
+          documentId: documentId,
+          error: error,
+        });
+      }
     }
   }
 );
 
-// Re-export types for use in other modules
+// API endpoint for file download
+export const downloadFile = api(
+  { expose: true, method: "GET", path: "/upload/download/:documentId" },
+  async ({ documentId }: { documentId: string }): Promise<{
+    data: string; // Base64 encoded
+    fileName: string;
+    contentType: string;
+    fileSize: number;
+  }> => {
+    try {
+      logger.info("Received request to download file", {
+        documentId: documentId,
+      });
+
+      // Get document metadata from database
+      const result = await db.select({
+        filename: documents.filename,
+        originalName: documents.originalName,
+        contentType: documents.contentType,
+      }).from(documents)
+        .where(eq(documents.id, documentId))
+        .limit(1);
+      
+      if (result.length === 0) {
+        throw new Error('Document not found');
+      }
+      
+      const document = result[0];
+      
+      logger.info("Successfully retrieved document metadata from database for download", {
+        documentId: documentId,
+        bucketPath: document.filename,
+      });
+      
+      // Download file from bucket
+      const downloadRequest: BucketDownloadRequest = {
+        bucketPath: document.filename, // filename stores bucket path
+      };
+      
+      const downloadResult = await downloadFromBucket(downloadRequest);
+      
+      logger.info("Successfully downloaded file from bucket", {
+        documentId: documentId,
+        bucketPath: document.filename,
+        fileSize: downloadResult.fileSize,
+      });
+      
+      // Convert buffer to base64 for API response
+      const base64Data = downloadResult.data.toString('base64');
+      
+      logger.info("File download process completed successfully", {
+        documentId: documentId,
+        fileName: document.originalName,
+      });
+
+      return {
+        data: base64Data,
+        fileName: document.originalName,
+        contentType: document.contentType,
+        fileSize: downloadResult.fileSize,
+      };
+      
+    } catch (error) {
+      console.error('File download error:', error);
+      const errorMessage = 'File download failed';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          documentId: documentId,
+        });
+      } else {
+        logger.error(errorMessage, {
+          documentId: documentId,
+          error: error,
+        });
+      }
+      throw new Error(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+// API endpoint to delete a file
+export const deleteFile = api(
+  { expose: true, method: "DELETE", path: "/upload/file/:documentId" },
+  async ({ documentId }: { documentId: string }): Promise<{ success: boolean }> => {
+    try {
+      logger.info("Received request to delete file", {
+        documentId: documentId,
+      });
+
+      // Get document metadata from database
+      const result = await db.select({
+        filename: documents.filename, // bucket path
+      }).from(documents)
+        .where(eq(documents.id, documentId))
+        .limit(1);
+      
+      if (result.length === 0) {
+        throw new Error('Document not found');
+      }
+      
+      const document = result[0];
+      
+      // Delete file from bucket
+      await deleteFromBucket(document.filename);
+      
+      // Delete document record from database
+      await db.delete(documents).where(eq(documents.id, documentId));
+      
+      console.log(`Successfully deleted document ${documentId} and file ${document.filename}`);
+      
+      logger.info("File and document record successfully deleted", {
+        documentId: documentId,
+        bucketPath: document.filename,
+      });
+      
+      return { success: true };
+      
+    } catch (error) {
+      console.error('File deletion error:', error);
+      const errorMessage = 'File deletion failed';
+      if (error instanceof Error) {
+        logger.error(error, errorMessage, {
+          documentId: documentId,
+        });
+      } else {
+        logger.error(errorMessage, {
+          documentId: documentId,
+          error: error,
+        });
+      }
+      throw new Error(`Deletion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+// API endpoint to check if file exists
+export const fileExists = api(
+  { expose: true, method: "GET", path: "/upload/exists/:documentId" },
+  async ({ documentId }: { documentId: string }): Promise<{
+    exists: boolean;
+    inDatabase: boolean;
+    inBucket: boolean;
+    bucketPath?: string;
+  }> => {
+    try {
+      // Check if document exists in database
+      const dbResult = await db.select({
+        filename: documents.filename,
+      }).from(documents)
+        .where(eq(documents.id, documentId))
+        .limit(1);
+      
+      const inDatabase = dbResult.length > 0;
+      let inBucket = false;
+      let bucketPath: string | undefined;
+      
+      if (inDatabase) {
+        bucketPath = dbResult[0].filename;
+        inBucket = await fileExistsInBucket(bucketPath);
+      }
+      
+      return {
+        exists: inDatabase && inBucket,
+        inDatabase,
+        inBucket,
+        bucketPath,
+      };
+      
+    } catch (error) {
+      console.error('File existence check error:', error);
+      throw new Error(`Existence check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+// API endpoint to get file metadata
+export const getFileMetadata = api(
+  { expose: true, method: "GET", path: "/upload/metadata/:documentId" },
+  async ({ documentId }: { documentId: string }): Promise<{
+    fileName: string;
+    originalName: string;
+    contentType: string;
+    fileSize: number;
+    uploadedAt: Date;
+    bucketPath: string;
+    bucketMetadata?: {
+      lastModified: Date;
+      etag?: string;
+    };
+  }> => {
+    try {
+      // Get document metadata from database
+      const result = await db.select().from(documents)
+        .where(eq(documents.id, documentId))
+        .limit(1);
+      
+      if (result.length === 0) {
+        throw new Error('Document not found');
+      }
+      
+      const document = result[0];
+      
+      // Get bucket metadata
+      let bucketMetadata;
+      try {
+        const bucketInfo = await getBucketFileMetadata(document.filename);
+        bucketMetadata = {
+          lastModified: bucketInfo.lastModified,
+          etag: bucketInfo.etag,
+        };
+      } catch (error) {
+        console.warn(`Could not get bucket metadata for ${document.filename}:`, error);
+      }
+      
+      return {
+        fileName: document.filename,
+        originalName: document.originalName,
+        contentType: document.contentType,
+        fileSize: document.fileSize,
+        uploadedAt: document.uploadedAt,
+        bucketPath: document.filename,
+        bucketMetadata,
+      };
+      
+    } catch (error) {
+      console.error('File metadata error:', error);
+      throw new Error(`Metadata retrieval failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+// Helper function to trigger document processing
+async function triggerDocumentProcessing(
+  documentId: string, 
+  bucketPath: string, 
+  contentType: string
+): Promise<void> {
+  try {
+    // Import here to avoid circular dependencies
+    const { processDocument } = await import("../docprocessing/processing");
+    
+    const processingRequest = {
+      documentID: documentId,
+      filePath: bucketPath,
+      contentType: contentType,
+    };
+    
+    // Process document asynchronously
+    await processDocument(processingRequest);
+    
+  } catch (error) {
+    console.error(`Document processing failed for ${documentId}:`, error);
+    
+    // Update document status to failed
+    await db.update(documents)
+      .set({ status: 'failed' })
+      .where(eq(documents.id, documentId));
+    
+    throw error;
+  }
+}
+
+// Re-export types and functions for use in other modules
+export { 
+  uploadToBucket, 
+  downloadFromBucket, 
+  deleteFromBucket, 
+  fileExistsInBucket,
+  getBucketFileMetadata,
+  generateBucketPath 
+} from "./storage";

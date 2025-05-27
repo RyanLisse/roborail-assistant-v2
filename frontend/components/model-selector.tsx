@@ -22,14 +22,14 @@ export function ModelSelector({
   selectedModelId,
   className,
 }: {
-  session: Session;
+  session?: Session | null;
   selectedModelId: string;
 } & React.ComponentProps<typeof Button>) {
   const [open, setOpen] = useState(false);
   const [optimisticModelId, setOptimisticModelId] = useOptimistic(selectedModelId);
 
-  const userType = session.user.type;
-  const { availableChatModelIds } = entitlementsByUserType[userType];
+  const userType = session?.user?.type || "guest";
+  const { availableChatModelIds } = entitlementsByUserType[userType] || entitlementsByUserType.default;
 
   const availableChatModels = chatModels.filter((chatModel) =>
     availableChatModelIds.includes(chatModel.id)
