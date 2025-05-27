@@ -164,6 +164,19 @@ export type NewConversationMessage = typeof conversationMessages.$inferInsert;
 export type DocumentProcessingStatus = typeof documentProcessingStatus.$inferSelect;
 export type NewDocumentProcessingStatus = typeof documentProcessingStatus.$inferInsert;
 
+export type DocumentCollection = typeof documentCollections.$inferSelect;
+export type NewDocumentCollection = typeof documentCollections.$inferInsert;
+
+export type CollectionDocument = typeof collectionDocuments.$inferSelect;
+export type NewCollectionDocument = typeof collectionDocuments.$inferInsert;
+
+export type DocumentTag = typeof documentTags.$inferSelect;
+export type NewDocumentTag = typeof documentTags.$inferInsert;
+
+// Types for saved filters (commented out due to Encore compilation issue)
+// export type SavedFilter = typeof savedFilters.$inferSelect;
+export type NewSavedFilter = typeof savedFilters.$inferInsert;
+
 // Validation schemas using Zod
 export const createDocumentSchema = z.object({
   id: z.string().min(1),
@@ -234,3 +247,86 @@ export const createProcessingStatusSchema = z.object({
   maxRetries: z.number().int().min(0).default(3),
   progressPercentage: z.number().int().min(0).max(100).default(0),
 });
+
+// Document collections table - for organizing documents
+export const documentCollections = pgTable(
+  "document_collections",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+    color: text("color").default("#3B82F6"),
+    documentCount: integer("document_count").notNull().default(0),
+    tags: jsonb("tags").notNull().default("[]").$type<string[]>(),
+    metadata: jsonb("metadata").notNull().default("{}"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("collections_user_id_idx").on(table.userId),
+    nameIdx: index("collections_name_idx").on(table.name),
+    isPublicIdx: index("collections_is_public_idx").on(table.isPublic),
+    createdAtIdx: index("collections_created_at_idx").on(table.createdAt),
+  })
+);
+
+// Collection documents junction table - many-to-many relationship
+export const collectionDocuments = pgTable(
+  "collection_documents",
+  {
+    id: text("id").primaryKey(),
+    collectionId: text("collection_id").notNull().references(() => documentCollections.id, { onDelete: "cascade" }),
+    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+    addedBy: text("added_by").notNull(), // userId who added the document
+  },
+  (table) => ({
+    collectionIdIdx: index("collection_docs_collection_id_idx").on(table.collectionId),
+    documentIdIdx: index("collection_docs_document_id_idx").on(table.documentId),
+    // Unique constraint to prevent duplicate document-collection pairs
+    uniqueCollectionDocument: index("collection_docs_unique_idx").on(table.collectionId, table.documentId),
+  })
+);
+
+// Document tags table - for tagging system
+export const documentTags = pgTable(
+  "document_tags",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    userId: text("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    documentIdIdx: index("document_tags_document_id_idx").on(table.documentId),
+    tagIdx: index("document_tags_tag_idx").on(table.tag),
+    userIdIdx: index("document_tags_user_id_idx").on(table.userId),
+    // Unique constraint to prevent duplicate tags on same document
+    uniqueDocumentTag: index("document_tags_unique_idx").on(table.documentId, table.tag),
+  })
+);
+
+// Saved filters table - for storing user-defined filters
+export const savedFilters = pgTable(
+  "saved_filters",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    filters: jsonb("filters").notNull().$type<Record<string, any>>(),
+    isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+    useCount: integer("use_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("saved_filters_user_id_idx").on(table.userId),
+    nameIdx: index("saved_filters_name_idx").on(table.name),
+    isPublicIdx: index("saved_filters_is_public_idx").on(table.isPublic),
+    useCountIdx: index("saved_filters_use_count_idx").on(table.useCount),
+  })
+);

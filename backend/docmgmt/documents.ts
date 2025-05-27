@@ -278,43 +278,207 @@ export const updateDocument = api(
 
 // Delete document
 export const deleteDocument = api(
-  { expose: true, method: "DELETE", path: "/documents/:documentID" },
-  async ({ documentID }: { documentID: string }): Promise<{ success: boolean }> => {
-    // TODO: Implement document deletion
-    // - Delete document record
-    // - Delete associated chunks and embeddings
-    // - Delete physical file
-    // TODO: Verify user access permissions
-
-    return {
-      success: true,
-    };
+  { expose: true, method: "DELETE", path: "/documents/:documentId" },
+  async ({ documentId, userId }: { documentId: string; userId: string }): Promise<{ success: boolean }> => {
+    try {
+      // Verify document access
+      const existingDoc = await verifyDocumentAccess(documentId, userId);
+      if (!existingDoc) {
+        throw new Error("Document not found or access denied");
+      }
+      
+      // Start transaction - delete document and all related data
+      // Note: Due to foreign key constraints, chunks will be deleted automatically
+      const result = await db
+        .delete(documents)
+        .where(and(eq(documents.id, documentId), eq(documents.userId, userId)))
+        .returning();
+      
+      if (!result[0]) {
+        throw new Error("Failed to delete document");
+      }
+      
+      console.log(`Deleted document ${documentId} and all associated data`);
+      
+      return {
+        success: true,
+      };
+      
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 );
 
 // Get document chunks
 export const getDocumentChunks = api(
-  { expose: true, method: "GET", path: "/documents/:documentID/chunks" },
+  { expose: true, method: "GET", path: "/documents/:documentId/chunks" },
   async ({
-    documentID,
+    documentId,
+    userId,
     page = 1,
     limit = 50,
   }: {
-    documentID: string;
+    documentId: string;
+    userId: string;
     page?: number;
     limit?: number;
-  }): Promise<{
-    chunks: Array<{
-      id: string;
-      content: string;
-      metadata: Record<string, any>;
-    }>;
-    total: number;
-  }> => {
-    // TODO: Implement chunk retrieval for document
-    return {
-      chunks: [],
-      total: 0,
-    };
+  }): Promise<DocumentChunkResponse> => {
+    try {
+      // Verify document access
+      const doc = await verifyDocumentAccess(documentId, userId);
+      if (!doc) {
+        throw new Error("Document not found or access denied");
+      }
+      
+      const offset = (page - 1) * limit;
+      
+      // Get total count of chunks
+      const totalResult = await db
+        .select({ count: count() })
+        .from(documentChunks)
+        .where(eq(documentChunks.documentId, documentId));
+      
+      const total = totalResult[0].count;
+      
+      // Get paginated chunks
+      const results = await db
+        .select()
+        .from(documentChunks)
+        .where(eq(documentChunks.documentId, documentId))
+        .orderBy(asc(documentChunks.chunkIndex))
+        .limit(limit + 1)
+        .offset(offset);
+      
+      // Check if there are more results
+      const hasMore = results.length > limit;
+      const chunksData = hasMore ? results.slice(0, -1) : results;
+      
+      return {
+        chunks: chunksData.map(chunk => ({
+          id: chunk.id,
+          content: chunk.content,
+          chunkIndex: chunk.chunkIndex,
+          pageNumber: chunk.pageNumber || undefined,
+          tokenCount: chunk.tokenCount,
+          metadata: chunk.metadata as Record<string, any>,
+          createdAt: chunk.createdAt,
+        })),
+        total,
+        page,
+        limit,
+        hasMore,
+      };
+      
+    } catch (error) {
+      console.error('Error retrieving document chunks:', error);
+      throw new Error(`Failed to retrieve document chunks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+// Get document statistics
+export const getDocumentStats = api(
+  { expose: true, method: "GET", path: "/documents/:documentId/stats" },
+  async ({
+    documentId,
+    userId,
+  }: {
+    documentId: string;
+    userId: string;
+  }): Promise<DocumentStats> => {
+    try {
+      // Verify document access
+      const doc = await verifyDocumentAccess(documentId, userId);
+      if (!doc) {
+        throw new Error("Document not found or access denied");
+      }
+      
+      // Get chunk statistics
+      const chunkStats = await db
+        .select({
+          totalChunks: count(),
+          totalTokens: sql<number>`SUM(${documentChunks.tokenCount})`,
+          averageChunkSize: sql<number>`AVG(LENGTH(${documentChunks.content}))`,
+        })
+        .from(documentChunks)
+        .where(eq(documentChunks.documentId, documentId));
+      
+      const stats = chunkStats[0];
+      
+      // Calculate processing duration if available
+      const processingDuration = doc.processedAt && doc.uploadedAt ? 
+        doc.processedAt.getTime() - doc.uploadedAt.getTime() : undefined;
+      
+      return {
+        totalChunks: Number(stats.totalChunks) || 0,
+        totalTokens: Number(stats.totalTokens) || 0,
+        averageChunkSize: Number(stats.averageChunkSize) || 0,
+        processingDuration,
+      };
+      
+    } catch (error) {
+      console.error('Error retrieving document stats:', error);
+      throw new Error(`Failed to retrieve document stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+// Update document processing status (internal API for processing pipeline)
+export const updateProcessingStatus = api(
+  { expose: false, method: "POST", path: "/documents/:documentId/status" },
+  async ({
+    documentId,
+    status,
+    chunkCount,
+    errorMessage,
+  }: {
+    documentId: string;
+    status: "uploaded" | "processing" | "processed" | "failed";
+    chunkCount?: number;
+    errorMessage?: string;
+  }): Promise<Document> => {
+    try {
+      // Validate request
+      const validated = ProcessingStatusUpdateSchema.parse({
+        documentId,
+        status,
+        chunkCount,
+        errorMessage,
+      });
+      
+      // Prepare update data
+      const updateData: Partial<DBDocument> = {
+        status: validated.status,
+        updatedAt: new Date(),
+      };
+      
+      if (status === "processed") {
+        updateData.processedAt = new Date();
+      }
+      
+      if (chunkCount !== undefined) {
+        updateData.chunkCount = chunkCount;
+      }
+      
+      // Update document status
+      const result = await db
+        .update(documents)
+        .set(updateData)
+        .where(eq(documents.id, documentId))
+        .returning();
+      
+      if (!result[0]) {
+        throw new Error("Document not found");
+      }
+      
+      console.log(`Updated document ${documentId} status to ${status}`);
+      return formatDocumentResponse(result[0]);
+      
+    } catch (error) {
+      console.error('Error updating document processing status:', error);
+      throw new Error(`Failed to update processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 );

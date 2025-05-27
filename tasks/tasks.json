@@ -252,7 +252,7 @@
           "description": "Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning and audit trails.",
           "dependencies": [],
           "details": "This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning features as described in standard DMS architectures.",
-          "status": "in-progress"
+          "status": "done"
         },
         {
           "id": 2,
@@ -262,7 +262,7 @@
             1
           ],
           "details": "This involves building indexing mechanisms, search APIs, and user interfaces for sorting and filtering documents, leveraging metadata captured during CRUD operations.",
-          "status": "pending"
+          "status": "in-progress"
         },
         {
           "id": 3,

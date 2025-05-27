@@ -44,8 +44,9 @@ const createMockChunk = (documentId: string, index: number) => ({
 // Mock database operations
 const mockDocumentOperations = {
   async create(document: any) {
-    mockDocuments.set(document.id, { ...document, createdAt: new Date(), updatedAt: new Date() });
-    return document;
+    const withDates = { ...document, createdAt: new Date(), updatedAt: new Date() };
+    mockDocuments.set(document.id, withDates);
+    return withDates;
   },
 
   async findById(id: string) {
@@ -114,11 +115,17 @@ const mockDocumentOperations = {
     if (status === "processed") {
       updates.processedAt = new Date();
     }
+    // For failed status, keep existing processedAt as undefined
     if (metadata) {
       updates.metadata = { ...doc.metadata, ...metadata };
     }
 
     const updatedDoc = { ...doc, ...updates };
+    // Don't set processedAt for failed status
+    if (status === "failed") {
+      delete updatedDoc.processedAt;
+    }
+    
     mockDocuments.set(id, updatedDoc);
     return updatedDoc;
   },
@@ -509,7 +516,7 @@ describe("Document Management Service", () => {
       
       // Test with missing required fields
       const invalidDoc = { ...documentData };
-      delete invalidDoc.userId;
+      delete (invalidDoc as any).userId;
       
       // In a real implementation, this would validate and throw
       expect(() => {

@@ -11,13 +11,13 @@ Support CRUD for documents with metadata (author, tags, department, access level
 Test document CRUD, metadata handling, and file management. Validate error handling.
 
 # Subtasks:
-## 1. Implement CRUD Operations for Documents and Metadata [in-progress]
+## 1. Implement CRUD Operations for Documents and Metadata [done]
 ### Dependencies: None
 ### Description: Develop functionality to create, read, update, and delete documents and their associated metadata, ensuring proper versioning and audit trails.
 ### Details:
 This includes designing data models for documents and metadata, implementing API endpoints for CRUD operations, and integrating versioning features as described in standard DMS architectures.
 
-## 2. Develop Document Organization and Filtering Functionality [pending]
+## 2. Develop Document Organization and Filtering Functionality [in-progress]
 ### Dependencies: 5.1
 ### Description: Create features for organizing documents (e.g., folders, tags, categories) and implement robust filtering and search capabilities based on metadata and content.
 ### Details:
