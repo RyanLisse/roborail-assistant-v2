@@ -218,7 +218,7 @@
             3
           ],
           "details": "Utilize Cohere's AI capabilities to create meaningful semantic chunks and embeddings from extracted data.",
-          "status": "pending"
+          "status": "in-progress"
         },
         {
           "id": 5,

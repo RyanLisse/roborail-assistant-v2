@@ -29,7 +29,7 @@ Configure bucket permissions and ensure seamless file transfer from the upload s
 ### Details:
 Configure Unstructured.io to handle various document formats and extract structured data.
 
-## 4. Semantic Chunking and Embedding with Cohere [pending]
+## 4. Semantic Chunking and Embedding with Cohere [in-progress]
 ### Dependencies: 4.3
 ### Description: Apply semantic chunking and embedding using Cohere to analyze parsed document data.
 ### Details:
