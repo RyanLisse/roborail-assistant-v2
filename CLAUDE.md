@@ -61,6 +61,15 @@ bun run lint        # Run linting (if configured)
 bun run typecheck   # TypeScript compilation check
 ```
 
+### Environment Setup
+```bash
+# Initial setup for remote environments
+./scripts/setup.sh
+
+# Verify environment is properly configured
+./scripts/verify-setup.sh
+```
+
 ## Architecture Overview
 
 ### Service Structure
