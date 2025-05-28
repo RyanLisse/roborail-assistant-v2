@@ -6,12 +6,10 @@ const mockCacheSet = vi.fn();
 const mockEmbeddingGet = vi.fn();
 const mockEmbeddingSet = vi.fn();
 
-vi.mock("../lib/cache/cache-manager", () => ({
-  CacheManager: vi.fn().mockImplementation(() => ({
-    get: mockCacheGet,
-    set: mockCacheSet,
-  })),
-}));
+// Move mocks to beforeEach to avoid module-level issues
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 vi.mock("../lib/cache/embedding-cache", () => ({
   EmbeddingCache: vi.fn().mockImplementation(() => ({
