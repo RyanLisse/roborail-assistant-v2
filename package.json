@@ -48,7 +48,7 @@
     "dev:frontend": "cd frontend && bun run dev",
     "build": "bun run build:backend && bun run build:frontend",
     "build:backend": "cd backend && encore build",
-    "build:frontend": "cd frontend && npm install --legacy-peer-deps && npm run build:static",
+    "build:frontend": "cd frontend && bun install && bun run build:static",
     "test": "bun run test:unit",
     "test:unit": "vitest --config vitest.config.unit.ts",
     "test:integration": "vitest --config vitest.config.integration.ts",
@@ -80,5 +80,6 @@
   "dependencies": {
     "nanoid": "^5.1.5",
     "uuid": "^11.1.0"
-  }
+  },
+  "packageManager": "bun@1.2.14"
 }

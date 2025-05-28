@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build:static",
-  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "bun run build:static",
+  "installCommand": "bun install",
   "framework": "nextjs",
   "cleanUrls": true,
   "trailingSlash": false,

@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build:frontend",
+  "buildCommand": "bun run build:frontend",
   "outputDirectory": "frontend/.next",
-  "installCommand": "npm install",
+  "installCommand": "bun install",
   "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
