@@ -28,7 +28,7 @@ describe("RAG Pipeline Integration Tests", () => {
       originalName: "Machine Learning Guide.pdf",
       contentType: "application/pdf",
       fileSize: 1024000,
-      status: "completed",
+      status: "processed",
       uploadedAt: new Date(),
       processedAt: new Date(),
       chunkCount: 2,
