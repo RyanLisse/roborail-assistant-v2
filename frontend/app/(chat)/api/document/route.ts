@@ -53,7 +53,6 @@ export async function POST(request: Request) {
     content,
     title,
     kind,
-    userId: "anonymous",
   });
 
   return Response.json(document, { status: 200 });

@@ -28,7 +28,7 @@ describe("RAG Pipeline Integration Tests", () => {
       originalName: "Machine Learning Guide.pdf",
       contentType: "application/pdf",
       fileSize: 1024000,
-      status: "completed",
+      status: "processed",
       uploadedAt: new Date(),
       processedAt: new Date(),
       chunkCount: 2,
@@ -50,6 +50,7 @@ describe("RAG Pipeline Integration Tests", () => {
         embedding: sampleEmbedding,
         chunkIndex: 0,
         pageNumber: 1,
+        tokenCount: 150,
         metadata: {
           elementTypes: ["text"],
           semanticCategory: "introduction",
@@ -65,6 +66,7 @@ describe("RAG Pipeline Integration Tests", () => {
         embedding: sampleEmbedding.map((x) => x + 0.1), // Slightly different embedding
         chunkIndex: 1,
         pageNumber: 2,
+        tokenCount: 140,
         metadata: {
           elementTypes: ["text"],
           semanticCategory: "technical",
@@ -203,14 +205,16 @@ describe("RAG Pipeline Integration Tests", () => {
     expect(response).toBeDefined();
     expect(response.followUpQuestions).toBeDefined();
     expect(Array.isArray(response.followUpQuestions)).toBe(true);
-    expect(response.followUpQuestions.length).toBeGreaterThan(0);
-    expect(response.followUpQuestions.length).toBeLessThanOrEqual(3);
+    if (response.followUpQuestions) {
+      expect(response.followUpQuestions.length).toBeGreaterThan(0);
+      expect(response.followUpQuestions.length).toBeLessThanOrEqual(3);
 
-    // Verify follow-up questions are meaningful
-    for (const question of response.followUpQuestions) {
-      expect(typeof question).toBe("string");
-      expect(question.length).toBeGreaterThan(10);
-      expect(question.endsWith("?")).toBe(true);
+      // Verify follow-up questions are meaningful
+      for (const question of response.followUpQuestions) {
+        expect(typeof question).toBe("string");
+        expect(question.length).toBeGreaterThan(10);
+        expect(question.endsWith("?")).toBe(true);
+      }
     }
   }, 20000);
 
