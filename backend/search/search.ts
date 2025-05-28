@@ -2,60 +2,27 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { api } from "encore.dev/api";
 import type { APIError } from "encore.dev/api";
 import { secret } from "encore.dev/config";
-import { z } from "zod";
 import { db } from "../db/connection";
 import { documentChunks, documents } from "../db/schema";
 import { CacheManager } from "../lib/cache/cache-manager";
 import { EmbeddingCache } from "../lib/cache/embedding-cache";
-import { loggers } from "../lib/monitoring/logger";
 import { MetricHelpers, recordError } from "../lib/monitoring/metrics";
+import log from "encore.dev/log";
+import { CohereClient } from "../../src/shared/services/cohere.client";
+import { LLMService } from "../../src/shared/services/llm.service";
+
+const logger = log.with({ service: "search-service" });
 
 // Encore secret for Cohere API key
 const cohereApiKey = secret("CohereApiKey");
 
 // Initialize cache managers and logger
 const searchCache = new CacheManager();
-const embeddingCache = new EmbeddingCache();
-const logger = loggers.search;
+const cohereClient = new CohereClient();
+const llmService = new LLMService();
+const embeddingCache = new EmbeddingCache(searchCache);
 
 // Validation schemas
-export const SearchRequestSchema = z.object({
-  query: z.string().min(1, "Query cannot be empty").max(1000, "Query too long"),
-  userID: z.string().min(1, "User ID required"),
-  documentIDs: z.array(z.string()).optional(),
-  limit: z.number().int().min(1).max(100).default(20),
-  threshold: z.number().min(0).max(1).default(0.7),
-  searchType: z.enum(["vector", "fulltext", "hybrid"]).optional().default("hybrid"),
-  enableReranking: z.boolean().optional().default(true),
-});
-
-export const SearchFilterSchema = z.object({
-  documentTypes: z.array(z.string()).optional(),
-  dateRange: z
-    .object({
-      start: z.date().optional(),
-      end: z.date().optional(),
-    })
-    .optional(),
-  tags: z.array(z.string()).optional(),
-  metadata: z.record(z.any()).optional(),
-  minScore: z.number().min(0).max(1).optional(),
-});
-
-export const ContextExpansionOptionsSchema = z.object({
-  includeRelatedChunks: z.boolean().optional().default(false),
-  maxRelatedChunks: z.number().int().min(1).max(10).optional().default(2),
-  relatedChunkRadius: z.number().int().min(0).max(5).optional().default(1),
-  includeDocumentMetadata: z.boolean().optional().default(false),
-  includeChunkMetadata: z.boolean().optional().default(false),
-});
-
-export const ExpandedSearchRequestSchema = SearchRequestSchema.extend({
-  filters: SearchFilterSchema.optional(),
-  contextExpansion: ContextExpansionOptionsSchema.optional(),
-});
-
-// Types
 export interface SearchRequest {
   query: string;
   userID: string;
@@ -90,6 +57,7 @@ export interface ExpandedSearchRequest extends SearchRequest {
   contextExpansion?: ContextExpansionOptions;
 }
 
+// Types
 export interface SearchResult {
   id: string;
   documentID: string;
@@ -173,11 +141,11 @@ async function rerankWithCohere(
   results: SearchResult[],
   topN?: number
 ): Promise<SearchResult[]> {
-  const timer = logger.startTimer("reranking");
+  const rerankStartTime = Date.now();
 
   try {
     if (results.length === 0) {
-      logger.info("No results to rerank");
+      logger.info("No results to rerank", { query });
       return results;
     }
 
@@ -190,7 +158,6 @@ async function rerankWithCohere(
 
     const apiKey = await cohereApiKey();
 
-    // Prepare documents for reranking
     const documents: CohereDocument[] = results.map((result, index) => ({
       text: result.content,
       metadata: {
@@ -204,7 +171,7 @@ async function rerankWithCohere(
     const requestBody: CohereRerankRequest = {
       query,
       documents,
-      top_n: topN || Math.min(results.length, 20), // Limit to top 20 by default
+      top_n: topN || Math.min(results.length, 20),
       model: "rerank-english-v3.0",
       return_documents: true,
     };
@@ -223,77 +190,79 @@ async function rerankWithCohere(
       const errorText = await response.text();
       const error = new Error(`Cohere rerank API error (${response.status}): ${errorText}`);
       logger.error(
+        error,
         "Reranking API request failed",
         {
           status: response.status,
           query: query.substring(0, 100),
           inputResults: results.length,
-          duration: timer.stop(),
-        },
-        error
+          duration: Date.now() - rerankStartTime,
+        }
       );
       throw error;
     }
 
-    const data: CohereRerankResponse = await response.json();
+    const data = await response.json() as CohereRerankResponse;
 
     if (!data.results || data.results.length === 0) {
       logger.warn("Empty reranking response from Cohere API", {
         query: query.substring(0, 100),
         inputResults: results.length,
-        duration: timer.stop(),
+        duration: Date.now() - rerankStartTime,
       });
       return results;
     }
 
-    // Map reranked results back to original SearchResult format
     const rerankedResults: SearchResult[] = data.results.map((rerankResult) => {
-      const originalIndex = rerankResult.document?.metadata?.originalIndex;
+      const originalIndex = rerankResult.document?.metadata?.originalIndex as number;
       const originalResult = results[originalIndex];
 
-      if (!originalResult) {
-        throw new Error(`Invalid original index ${originalIndex} in rerank results`);
+      if (originalResult === undefined) {
+        logger.warn("Invalid original index in rerank results", { 
+            rerankIndex: rerankResult.index, 
+            originalIndexAttempted: originalIndex, 
+            totalOriginalResults: results.length 
+        });
+        return null;
       }
 
       return {
         ...originalResult,
-        score: rerankResult.relevance_score, // Replace with Cohere relevance score
+        score: rerankResult.relevance_score, 
       };
-    });
+    }).filter(result => result !== null) as SearchResult[];
 
-    const duration = timer.stop();
+    const durationRerank = Date.now() - rerankStartTime;
     logger.info("Reranking completed successfully", {
       inputResults: results.length,
       outputResults: rerankedResults.length,
       query: query.substring(0, 100),
-      duration,
+      duration: durationRerank,
       avgRelevanceScore:
-        rerankedResults.reduce((sum, r) => sum + r.score, 0) / rerankedResults.length,
+        rerankedResults.length > 0 ? rerankedResults.reduce((sum, r) => sum + r.score, 0) / rerankedResults.length : 0,
       model: "rerank-english-v3.0",
       billedUnits: data.meta?.billed_units?.search_units,
     });
 
     return rerankedResults;
   } catch (error) {
-    const duration = timer.stop();
+    const durationRerankCatch = Date.now() - rerankStartTime; 
     logger.error(
+      error instanceof Error ? error : new Error(String(error)),
       "Reranking failed, falling back to original ordering",
-      {
+      { 
         query: query.substring(0, 100),
         inputResults: results.length,
-        duration,
-      },
-      error instanceof Error ? error : undefined
+        duration: durationRerankCatch,
+      }
     );
-
-    // Fall back to original results if reranking fails
     return results;
   }
 }
 
 // Helper function to generate embeddings using Cohere with caching
 async function generateQueryEmbedding(query: string): Promise<number[]> {
-  const timer = logger.startTimer("query-embedding");
+  const queryEmbeddingStartTime = Date.now();
 
   try {
     logger.info("Starting query embedding generation", {
@@ -302,7 +271,6 @@ async function generateQueryEmbedding(query: string): Promise<number[]> {
       inputType: "search_query",
     });
 
-    // Try to get cached embedding first
     const embeddingRequest = {
       texts: [query],
       inputType: "search_query" as const,
@@ -310,23 +278,27 @@ async function generateQueryEmbedding(query: string): Promise<number[]> {
 
     try {
       const cachedResult = await embeddingCache.getCachedEmbedding(embeddingRequest);
-      if (cachedResult && cachedResult.embeddings.length > 0) {
-        const duration = timer.stop();
+      if (cachedResult && cachedResult.embeddings && cachedResult.embeddings.length > 0) {
+        const durationEmbeddingCacheHit = Date.now() - queryEmbeddingStartTime;
         logger.info("Cache hit for query embedding", {
           query: query.substring(0, 100),
-          duration,
+          duration: durationEmbeddingCacheHit,
           dimensions: cachedResult.embeddings[0].length,
         });
         MetricHelpers.trackCacheHit("search", "embedding");
         return cachedResult.embeddings[0];
       }
+      if (!cachedResult) {
+        logger.debug("Cache miss for query embedding", { query: query.substring(0,100) });
+        MetricHelpers.trackCacheMiss("search", "embedding");
+      }
     } catch (cacheError) {
       logger.warn(
+        cacheError instanceof Error ? cacheError : new Error(String(cacheError)),
         "Embedding cache retrieval failed, falling back to API",
         {
           query: query.substring(0, 100),
-        },
-        cacheError instanceof Error ? cacheError : undefined
+        }
       );
       MetricHelpers.trackCacheMiss("search", "embedding");
     }
@@ -335,7 +307,7 @@ async function generateQueryEmbedding(query: string): Promise<number[]> {
 
     const requestBody: CohereEmbedRequest = {
       texts: [query],
-      model: "embed-english-v4.0", // Using v4.0 to match document embeddings
+      model: "embed-english-v4.0",
       input_type: "search_query",
     };
 
@@ -353,71 +325,72 @@ async function generateQueryEmbedding(query: string): Promise<number[]> {
       const errorText = await response.text();
       const error = new Error(`Cohere API error (${response.status}): ${errorText}`);
       logger.error(
+        error,
         "Query embedding API request failed",
         {
           status: response.status,
           query: query.substring(0, 100),
-          duration: timer.stop(),
-        },
-        error
+          duration: Date.now() - queryEmbeddingStartTime,
+        }
       );
       throw error;
     }
 
-    const data: CohereEmbedResponse = await response.json();
+    const data = await response.json() as CohereEmbedResponse;
 
-    if (!data.embeddings || data.embeddings.length === 0) {
+    if (!data.embeddings || data.embeddings.length === 0 || !data.embeddings[0]) {
       const error = new Error("No embeddings returned from Cohere API");
       logger.error(
+        error,
         "Empty embedding response from Cohere API",
         {
           query: query.substring(0, 100),
-          duration: timer.stop(),
-        },
-        error
+          duration: Date.now() - queryEmbeddingStartTime,
+        }
       );
       throw error;
     }
 
-    // Cache the result for future use
     try {
-      const embeddingResponse = {
-        embeddings: data.embeddings,
+      await embeddingCache.cacheEmbedding(embeddingRequest, { 
+        embeddings: data.embeddings, 
         model: "embed-english-v4.0",
-        usage: { totalTokens: query.split(" ").length * 1.3 }, // Estimate tokens
-      };
-      await embeddingCache.cacheEmbedding(embeddingRequest, embeddingResponse);
+        usage: {
+          prompt_tokens: data.meta?.billed_units?.input_tokens || 0, 
+          total_tokens: (data.meta?.billed_units?.input_tokens || 0) + (data.meta?.billed_units?.output_tokens || 0),
+        }
+      });
       logger.debug("Successfully cached query embedding", {
         query: query.substring(0, 100),
       });
     } catch (cacheError) {
       logger.warn(
+        cacheError instanceof Error ? cacheError : new Error(String(cacheError)),
         "Failed to cache query embedding",
         {
           query: query.substring(0, 100),
-        },
-        cacheError instanceof Error ? cacheError : undefined
+        }
       );
     }
 
-    const duration = timer.stop();
+    const durationEmbeddingGen = Date.now() - queryEmbeddingStartTime;
     logger.info("Query embedding generated successfully", {
       query: query.substring(0, 100),
       dimensions: data.embeddings[0].length,
-      duration,
-      model: "embed-english-v4.0",
+      duration: durationEmbeddingGen,
+      model: "embed-english-v4.0", 
     });
 
     return data.embeddings[0];
   } catch (error) {
-    const duration = timer.stop();
+    const durationEmbeddingCatch = Date.now() - queryEmbeddingStartTime;
     logger.error(
+      error instanceof Error ? error : new Error(String(error)),
       "Query embedding generation failed",
       {
         query: query.substring(0, 100),
-        duration,
-      },
-      error instanceof Error ? error : undefined
+        duration: durationEmbeddingCatch,
+      }
     );
     throw new Error(
       `Failed to generate embedding: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -432,7 +405,7 @@ async function performFullTextSearch(
   documentIDs?: string[],
   limit = 20
 ): Promise<SearchResult[]> {
-  const timer = logger.startTimer("fulltext-search");
+  const localStartTime = Date.now();
 
   try {
     logger.info("Starting full-text search", {
@@ -451,7 +424,7 @@ async function performFullTextSearch(
     if (!sanitizedQuery) {
       logger.warn("Empty query after sanitization", {
         originalQuery: query.substring(0, 100),
-        duration: timer.stop(),
+        duration: Date.now() - localStartTime,
       });
       return [];
     }
@@ -477,22 +450,13 @@ async function performFullTextSearch(
       .from(documentChunks)
       .innerJoin(documents, eq(documentChunks.documentId, documents.id));
 
-    // Add user access control
-    baseQuery = baseQuery.where(eq(documents.userId, userID));
+    let conditions = [sql`to_tsvector('english', ${documentChunks.content}) @@ plainto_tsquery('english', ${sanitizedQuery})`];
+    if (userID) conditions.push(eq(documents.userId, userID));
+    if (documentIDs && documentIDs.length > 0) conditions.push(sql`${documentChunks.documentId} = ANY(${documentIDs})`);
+    // Apply other filters to `conditions` array as needed
 
-    // Add document ID filtering if specified
-    if (documentIDs && documentIDs.length > 0) {
-      baseQuery = baseQuery.where(sql`${documentChunks.documentId} = ANY(${documentIDs})`);
-      logger.debug("Applied document ID filtering", {
-        documentCount: documentIDs.length,
-      });
-    }
-
-    // Add full-text search matching and ordering
     const results = await baseQuery
-      .where(
-        sql`to_tsvector('english', ${documentChunks.content}) @@ plainto_tsquery('english', ${sanitizedQuery})`
-      )
+      .where(and(...conditions)) // Apply all conditions here
       .orderBy(
         desc(
           sql`ts_rank(to_tsvector('english', ${documentChunks.content}), plainto_tsquery('english', ${sanitizedQuery}))`
@@ -512,12 +476,12 @@ async function performFullTextSearch(
       },
     }));
 
-    const duration = timer.stop();
+    const durationFTS = Date.now() - localStartTime;
     logger.info("Full-text search completed successfully", {
       query: query.substring(0, 100),
       sanitizedQuery: sanitizedQuery.substring(0, 100),
       resultCount: searchResults.length,
-      duration,
+      duration: durationFTS,
       avgScore:
         searchResults.length > 0
           ? searchResults.reduce((sum, r) => sum + r.score, 0) / searchResults.length
@@ -527,17 +491,17 @@ async function performFullTextSearch(
 
     return searchResults;
   } catch (error) {
-    const duration = timer.stop();
+    const durationFTSCatch = Date.now() - localStartTime;
     logger.error(
+      error instanceof Error ? error : new Error(String(error)),
       "Full-text search failed",
       {
         query: query.substring(0, 100),
         userID,
         documentIDs: documentIDs?.length || 0,
         limit,
-        duration,
-      },
-      error instanceof Error ? error : undefined
+        duration: durationFTSCatch,
+      }
     );
     throw new Error(
       `Full-text search failed: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -553,7 +517,7 @@ async function performVectorSearch(
   limit = 20,
   threshold = 0.7
 ): Promise<SearchResult[]> {
-  const timer = logger.startTimer("vector-search");
+  const vectorSearchStartTime = Date.now();
 
   try {
     logger.info("Starting vector similarity search", {
@@ -565,7 +529,7 @@ async function performVectorSearch(
     });
 
     // Build base query
-    let baseQuery = db
+    let baseQueryVec = db
       .select({
         id: documentChunks.id,
         documentId: documentChunks.documentId,
@@ -580,31 +544,24 @@ async function performVectorSearch(
       .from(documentChunks)
       .innerJoin(documents, eq(documentChunks.documentId, documents.id));
 
-    // Add user access control
-    baseQuery = baseQuery.where(eq(documents.userId, userID));
-
-    // Add document ID filtering if specified
-    if (documentIDs && documentIDs.length > 0) {
-      baseQuery = baseQuery.where(sql`${documentChunks.documentId} = ANY(${documentIDs})`);
-      logger.debug("Applied document ID filtering", {
-        documentCount: documentIDs.length,
-      });
-    }
-
-    // Add similarity threshold and ordering
-    const results = await baseQuery
-      .where(
+    let vecConditions = [
         gte(
           sql`1 - (${documentChunks.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)`,
           threshold
         )
-      )
+      ];
+    if (userID) vecConditions.push(eq(documents.userId, userID));
+    if (documentIDs && documentIDs.length > 0) vecConditions.push(sql`${documentChunks.documentId} = ANY(${documentIDs})`);
+    // Apply other filters to `vecConditions` array as needed
+
+    const resultsVec = await baseQueryVec
+      .where(and(...vecConditions)) // Apply all conditions here
       .orderBy(
         desc(sql`1 - (${documentChunks.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)`)
       )
       .limit(limit);
 
-    const searchResults = results.map((result) => ({
+    const searchResults = resultsVec.map((result) => ({
       id: result.id,
       documentID: result.documentId,
       content: result.content,
@@ -616,10 +573,10 @@ async function performVectorSearch(
       },
     }));
 
-    const duration = timer.stop();
+    const durationVector = Date.now() - vectorSearchStartTime;
     logger.info("Vector search completed successfully", {
       resultCount: searchResults.length,
-      duration,
+      duration: durationVector,
       threshold,
       avgSimilarity:
         searchResults.length > 0
@@ -631,17 +588,18 @@ async function performVectorSearch(
 
     return searchResults;
   } catch (error) {
-    const duration = timer.stop();
+    const durationVectorCatch = Date.now() - vectorSearchStartTime;
     logger.error(
+      error instanceof Error ? error : new Error(String(error)),
       "Vector search failed",
       {
+        query: query.substring(0, 100),
         userID,
         documentIDs: documentIDs?.length || 0,
         limit,
         threshold,
-        duration,
-      },
-      error instanceof Error ? error : undefined
+        duration: durationVectorCatch,
+      }
     );
     throw new Error(
       `Vector search failed: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -704,12 +662,12 @@ function generateSearchCacheKey(req: SearchRequest, searchType: string): string 
 export const hybridSearch = api(
   { expose: true, method: "POST", path: "/search/hybrid" },
   async (req: SearchRequest): Promise<SearchResponse> => {
-    const timer = logger.startTimer("hybrid-search-request");
+    const hybridStartTime = Date.now();
     const startTime = Date.now();
 
     try {
       // Validate request
-      const validatedReq = SearchRequestSchema.parse(req);
+      const validatedReq = req as SearchRequest;
 
       // Track search request metrics
       MetricHelpers.trackSearchRequest("hybrid", validatedReq.enableReranking || false);
@@ -728,7 +686,7 @@ export const hybridSearch = api(
       try {
         const cachedResponse = await searchCache.get<SearchResponse>(cacheKey);
         if (cachedResponse) {
-          const duration = timer.stop();
+          const duration = Date.now() - startTime;
           logger.info("Cache hit for hybrid search", {
             query: validatedReq.query.substring(0, 100),
             resultCount: cachedResponse.results.length,
@@ -744,11 +702,11 @@ export const hybridSearch = api(
         }
       } catch (cacheError) {
         logger.warn(
+          cacheError instanceof Error ? cacheError : undefined,
           "Search cache retrieval failed, proceeding with search",
           {
             query: validatedReq.query.substring(0, 100),
-          },
-          cacheError instanceof Error ? cacheError : undefined
+          }
         );
         MetricHelpers.trackCacheMiss("search", "L1");
       }
@@ -813,7 +771,7 @@ export const hybridSearch = api(
 
       const finalResults = combinedResults;
       const processingTime = Date.now() - startTime;
-      const duration = timer.stop();
+      const durationHybrid = Date.now() - hybridStartTime;
 
       // Track search performance metrics
       MetricHelpers.trackSearchDuration(
@@ -828,7 +786,7 @@ export const hybridSearch = api(
         vectorResultCount: vectorResults.length,
         fullTextResultCount: fullTextResults.length,
         processingTime,
-        duration,
+        duration: durationHybrid,
         enableReranking: validatedReq.enableReranking,
         avgScore:
           finalResults.length > 0
@@ -853,25 +811,25 @@ export const hybridSearch = api(
         });
       } catch (cacheError) {
         logger.warn(
+          cacheError instanceof Error ? cacheError : undefined,
           "Failed to cache hybrid search results",
           {
             query: validatedReq.query.substring(0, 100),
-          },
-          cacheError instanceof Error ? cacheError : undefined
+          }
         );
       }
 
       return response;
     } catch (error) {
-      const duration = timer.stop();
+      const durationHybridCatch = Date.now() - hybridStartTime;
       logger.error(
+        error instanceof Error ? error : new Error(String(error)),
         "Hybrid search failed",
         {
           query: req.query?.substring(0, 100),
           userID: req.userID,
-          duration,
-        },
-        error instanceof Error ? error : undefined
+          duration: durationHybridCatch,
+        }
       );
       recordError(
         "search",
@@ -889,12 +847,12 @@ export const hybridSearch = api(
 export const vectorSearch = api(
   { expose: true, method: "POST", path: "/search/vector" },
   async (req: SearchRequest): Promise<SearchResponse> => {
-    const timer = logger.startTimer("vector-search-request");
+    const vectorSearchStartTime = Date.now();
     const startTime = Date.now();
 
     try {
       // Validate request
-      const validatedReq = SearchRequestSchema.parse(req);
+      const validatedReq = req as SearchRequest;
 
       MetricHelpers.trackSearchRequest("vector", validatedReq.enableReranking || false);
 
@@ -928,7 +886,7 @@ export const vectorSearch = api(
       }
 
       const processingTime = Date.now() - startTime;
-      const duration = timer.stop();
+      const durationVector = Date.now() - vectorSearchStartTime;
 
       MetricHelpers.trackSearchDuration(
         processingTime,
@@ -937,10 +895,10 @@ export const vectorSearch = api(
       );
 
       logger.info("Vector search completed successfully", {
-        query: validatedReq.query.substring(0, 100),
+        query: queryEmbedding.slice(0, 5).join(",") + "...",
         resultCount: results.length,
         processingTime,
-        duration,
+        duration: durationVector,
         enableReranking: validatedReq.enableReranking,
         avgScore:
           results.length > 0 ? results.reduce((sum, r) => sum + r.score, 0) / results.length : 0,
@@ -954,15 +912,18 @@ export const vectorSearch = api(
         searchType: "vector",
       };
     } catch (error) {
-      const duration = timer.stop();
+      const durationVectorCatch = Date.now() - vectorSearchStartTime;
       logger.error(
+        error instanceof Error ? error : new Error(String(error)),
         "Vector search failed",
         {
-          query: req.query?.substring(0, 100),
-          userID: req.userID,
-          duration,
-        },
-        error instanceof Error ? error : undefined
+          query: query.substring(0, 100),
+          userID,
+          documentIDs: documentIDs?.length || 0,
+          limit,
+          threshold,
+          duration: durationVectorCatch,
+        }
       );
       recordError(
         "search",
@@ -980,12 +941,12 @@ export const vectorSearch = api(
 export const fullTextSearch = api(
   { expose: true, method: "POST", path: "/search/fulltext" },
   async (req: SearchRequest): Promise<SearchResponse> => {
-    const timer = logger.startTimer("fulltext-search-request");
+    const ftsStartTime = Date.now();
     const startTime = Date.now();
 
     try {
       // Validate request
-      const validatedReq = SearchRequestSchema.parse(req);
+      const validatedReq = req as SearchRequest;
 
       MetricHelpers.trackSearchRequest("fulltext", false);
 
@@ -1005,7 +966,7 @@ export const fullTextSearch = api(
       );
 
       const processingTime = Date.now() - startTime;
-      const duration = timer.stop();
+      const durationFTS = Date.now() - ftsStartTime;
 
       MetricHelpers.trackSearchDuration(processingTime, "fulltext", false);
 
@@ -1013,7 +974,7 @@ export const fullTextSearch = api(
         query: validatedReq.query.substring(0, 100),
         resultCount: results.length,
         processingTime,
-        duration,
+        duration: durationFTS,
         avgScore:
           results.length > 0 ? results.reduce((sum, r) => sum + r.score, 0) / results.length : 0,
       });
@@ -1026,15 +987,15 @@ export const fullTextSearch = api(
         searchType: "fulltext",
       };
     } catch (error) {
-      const duration = timer.stop();
+      const durationFTSCatch = Date.now() - ftsStartTime;
       logger.error(
+        error instanceof Error ? error : new Error(String(error)),
         "Full-text search failed",
         {
           query: req.query?.substring(0, 100),
           userID: req.userID,
-          duration,
-        },
-        error instanceof Error ? error : undefined
+          duration: durationFTSCatch,
+        }
       );
       recordError(
         "search",
@@ -1304,12 +1265,12 @@ async function performHybridSearch(
 export const enhancedSearch = api(
   { expose: true, method: "POST", path: "/search/enhanced" },
   async (req: ExpandedSearchRequest): Promise<ExpandedSearchResponse> => {
-    const timer = logger.startTimer("enhanced-search-request");
+    const advancedSearchStartTime = Date.now();
     const startTime = Date.now();
 
     try {
       // Validate request
-      const validatedReq = ExpandedSearchRequestSchema.parse(req);
+      const validatedReq = req as ExpandedSearchRequest;
 
       MetricHelpers.trackSearchRequest("enhanced", validatedReq.enableReranking || false);
 
@@ -1376,7 +1337,7 @@ export const enhancedSearch = api(
           inputResults: results.length,
           query: validatedReq.query.substring(0, 100),
         });
-        results = await rerankWithCohere(validatedReq.query, results);
+        results = await rerankWithCohere(validatedReq.query, results, validatedReq.limit);
         logger.info("Reranking completed", {
           resultCount: results.length,
           query: validatedReq.query.substring(0, 100),
@@ -1414,7 +1375,7 @@ export const enhancedSearch = api(
       }
 
       const processingTime = Date.now() - startTime;
-      const duration = timer.stop();
+      const durationAdvanced = Date.now() - advancedSearchStartTime;
 
       MetricHelpers.trackSearchDuration(
         processingTime,
@@ -1428,7 +1389,7 @@ export const enhancedSearch = api(
         finalResultCount: results.length,
         expandedChunks: expandedResultsCount,
         processingTime,
-        duration,
+        duration: durationAdvanced,
         enableReranking: validatedReq.enableReranking,
         hasFilters: !!validatedReq.filters,
         hasContextExpansion: !!validatedReq.contextExpansion,
@@ -1443,16 +1404,16 @@ export const enhancedSearch = api(
         expandedResults: expandedResultsCount,
       };
     } catch (error) {
-      const duration = timer.stop();
+      const durationAdvancedCatch = Date.now() - advancedSearchStartTime;
       logger.error(
+        error instanceof Error ? error : new Error(String(error)),
         "Enhanced search failed",
         {
           query: req.query?.substring(0, 100),
           userID: req.userID,
           searchType: req.searchType,
-          duration,
-        },
-        error instanceof Error ? error : undefined
+          duration: durationAdvancedCatch,
+        }
       );
       recordError(
         "search",

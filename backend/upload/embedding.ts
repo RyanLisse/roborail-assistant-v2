@@ -1,15 +1,22 @@
-import { config } from "../../shared/config/environment";
-import { MetricsRecorder } from "../../shared/infrastructure/monitoring/metrics";
+import { secret } from "encore.dev/config";
 import { MultiLevelEmbeddingCache } from "../lib/infrastructure/cache/embedding-cache";
 import { loggers } from "../lib/monitoring/logger";
 import { MetricHelpers, recordError } from "../lib/monitoring/metrics";
 
-// Use centralized configuration for Cohere API key
-const cohereApiKey = config.ai.cohereApiKey;
+// Encore secret for Cohere API key
+const cohereApiKey = secret("CohereApiKey");
 
-// Initialize embedding cache and logger
-const embeddingCache = new MultiLevelEmbeddingCache();
+// Lazy initialization of embedding cache and logger
+let embeddingCache: MultiLevelEmbeddingCache | null = null;
 const logger = loggers.upload;
+
+// Initialize cache lazily within service context
+function getEmbeddingCache(): MultiLevelEmbeddingCache {
+  if (!embeddingCache) {
+    embeddingCache = new MultiLevelEmbeddingCache();
+  }
+  return embeddingCache;
+}
 
 // Types for semantic chunking and embedding
 export interface ChunkingRequest {
@@ -82,6 +89,21 @@ export interface EmbeddingResponse {
   model: string;
   usage: {
     totalTokens: number;
+  };
+}
+
+// Cohere API response interface
+interface CohereEmbedResponse {
+  embeddings: number[][];
+  id: string;
+  response_type?: string;
+  meta?: {
+    api_version?: {
+      version: string;
+    };
+    billed_units?: {
+      input_tokens: number;
+    };
   };
 }
 
@@ -494,7 +516,7 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
 
     for (let i = 0; i < request.texts.length; i++) {
       try {
-        const cached = await embeddingCache.get(request.texts[i]);
+        const cached = await getEmbeddingCache().get(request.texts[i]);
         if (cached) {
           cachedEmbeddings[i] = cached;
         } else {
@@ -559,7 +581,7 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
     // Cache new embeddings individually
     const cachePromises = uncachedTexts.map(async (text, index) => {
       try {
-        await embeddingCache.set(text, newEmbeddings[index]);
+        await getEmbeddingCache().set(text, newEmbeddings[index]);
       } catch (cacheError) {
         console.warn("Cache error during storage for text:", text.substring(0, 50), cacheError);
       }
@@ -597,8 +619,6 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
     const duration = Date.now() - startTime;
     MetricHelpers.trackEmbeddingDuration(duration, "embed-english-v4.0", batchSize);
 
-    // Record metrics using new MetricsRecorder
-    MetricsRecorder.recordEmbeddingGeneration(duration, batchSize, "embed-english-v4.0");
 
     logger.info("Embedding generation completed successfully", {
       totalTexts: request.texts.length,
@@ -690,7 +710,7 @@ async function generateEmbeddingBatch(
       throw error;
     }
 
-    const data = await response.json();
+    const data = await response.json() as CohereEmbedResponse;
 
     // Validate response structure
     if (!data.embeddings || !Array.isArray(data.embeddings)) {

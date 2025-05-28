@@ -303,7 +303,7 @@ function buildLLMRequest(
   const systemPrompt = modeConfig.promptTemplate;
 
   // Build the complete prompt
-  const messages = [
+  const messages: Array<{ role: "system" | "user" | "model"; content: string }> = [
     {
       role: "system" as const,
       content: systemPrompt,

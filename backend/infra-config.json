@@ -1,0 +1,97 @@
+{
+  "$schema": "https://encore.dev/schemas/infra.schema.json",
+  "metadata": {
+    "app_id": "roborail-assistant",
+    "env_name": "production",
+    "env_type": "production",
+    "cloud": "aws",
+    "base_url": "https://api.roborail-assistant.com"
+  },
+  "graceful_shutdown": {
+    "total": 30,
+    "shutdown_hooks": 10,
+    "handlers": 20
+  },
+  "auth": [
+    {
+      "type": "key",
+      "id": 1,
+      "key": {
+        "$env": "SERVICE_API_KEY"
+      }
+    }
+  ],
+  "sql_servers": [
+    {
+      "host": "localhost:5432",
+      "tls_config": {
+        "disabled": false
+      },
+      "databases": {
+        "rag_db": {
+          "max_connections": 100,
+          "min_connections": 10,
+          "username": "postgres",
+          "password": {
+            "$env": "DB_PASSWORD"
+          }
+        }
+      }
+    }
+  ],
+  "redis": {
+    "embedding_cache": {
+      "host": "localhost:6379",
+      "database_index": 0,
+      "auth": {
+        "type": "auth",
+        "auth_string": {
+          "$env": "REDIS_AUTH_STRING"
+        }
+      },
+      "max_connections": 50,
+      "min_connections": 5,
+      "key_prefix": "roborail:"
+    }
+  },
+  "secrets": {
+    "CohereApiKey": {
+      "$env": "COHERE_API_KEY"
+    },
+    "GeminiApiKey": {
+      "$env": "GEMINI_API_KEY"
+    },
+    "UnstructuredApiKey": {
+      "$env": "UNSTRUCTURED_API_KEY"
+    },
+    "DB_PASSWORD": {
+      "$env": "DB_PASSWORD"
+    },
+    "REDIS_AUTH_STRING": {
+      "$env": "REDIS_AUTH_STRING"
+    },
+    "SERVICE_API_KEY": {
+      "$env": "SERVICE_API_KEY"
+    }
+  },
+  "metrics": {
+    "type": "prometheus",
+    "collection_interval": 15,
+    "remote_write_url": {
+      "$env": "PROMETHEUS_REMOTE_WRITE_URL"
+    }
+  },
+  "object_storage": [
+    {
+      "type": "s3",
+      "region": "us-east-1",
+      "buckets": {
+        "document-storage": {
+          "name": "roborail-documents",
+          "key_prefix": "uploads/",
+          "public_base_url": "https://cdn.roborail-assistant.com/uploads"
+        }
+      }
+    }
+  ]
+}

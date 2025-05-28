@@ -283,14 +283,14 @@ export const streamMessage = api(
 );
 
 // Health check endpoint
-export const chatHealth = api(
+export const health = api(
   { expose: true, method: "GET", path: "/chat/health" },
   async (): Promise<{ status: string; timestamp: string; services: Record<string, boolean> }> => {
     try {
       // Import the RAG health check
-      const { health: ragHealth } = await import("./rag-orchestration");
-      const ragStatus = await ragHealth();
-
+      const { ragHealth: actualRagHealthCheck } = await import("./rag-orchestration");
+      const ragStatus = await actualRagHealthCheck();
+      
       const isHealthy = ragStatus.status === "healthy";
       logger.info("Chat service health check processed", {
         overallStatus: isHealthy ? "healthy" : "degraded",

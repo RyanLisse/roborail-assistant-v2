@@ -13,6 +13,7 @@ import {
   type GenericStringCacheKey,
   GenericStringKeyspace,
 } from "../infrastructure/cache/cache";
+import { StructKeyspace, StringKeyspace, IntKeyspace, EncoreError as CacheMissError, Duration } from "encore.dev";
 
 const logger = log.with({ service: "cache-service" });
 
@@ -44,16 +45,16 @@ export class CacheService {
    * @param key The key object for the item.
    * @returns The cached item or null if not found or error.
    */
-  static async getStruct<K, V>(keyspace: cache.StructKeyspace<K, V>, key: K): Promise<V | null> {
+  static async getStruct<K, V>(keyspace: StructKeyspace<K, V>, key: K): Promise<V | null> {
     try {
-      const value = await keyspace.Get(key);
-      logger.debug("Cache hit", { keyspace: keyspace.Name, key });
+      const value = await keyspace.get(key);
+      logger.debug("Cache hit", { keyspace: (keyspace as any).name, key });
       return value;
     } catch (error) {
-      if (error instanceof CacheOpError && error.message.includes("cache miss")) {
-        logger.debug("Cache miss", { keyspace: keyspace.Name, key });
+      if (error instanceof CacheMissError && (error as any).code === 'MISS') {
+        logger.debug("Cache miss", { keyspace: (keyspace as any).name, key });
       } else {
-        logger.error(error, "Error getting item from cache", { keyspace: keyspace.Name, key });
+        logger.error(error as Error, "Error getting item from cache", { keyspace: (keyspace as any).name, key });
       }
       return null;
     }
@@ -67,20 +68,20 @@ export class CacheService {
    * @param ttl Optional TTL for this specific item, overriding keyspace default.
    */
   static async setStruct<K, V>(
-    keyspace: cache.StructKeyspace<K, V>,
+    keyspace: StructKeyspace<K, V>,
     key: K,
     value: V,
     ttl?: Duration
   ): Promise<void> {
     try {
       if (ttl) {
-        await keyspace.With({ DefaultExpiry: ttl }).Set(key, value);
+        await keyspace.with({ defaultExpiry: ttl }).set(key, value);
       } else {
-        await keyspace.Set(key, value);
+        await keyspace.set(key, value);
       }
-      logger.debug("Item set in cache", { keyspace: keyspace.Name, key, ttl: ttl?.toString() });
+      logger.debug("Item set in cache", { keyspace: (keyspace as any).name, key, ttl: ttl?.toString() });
     } catch (error) {
-      logger.error(error, "Error setting item in cache", { keyspace: keyspace.Name, key });
+      logger.error(error as Error, "Error setting item in cache", { keyspace: (keyspace as any).name, key });
     }
   }
 
@@ -89,26 +90,26 @@ export class CacheService {
    * @param keyspace The Encore StructKeyspace to use.
    * @param key The key object for the item.
    */
-  static async deleteStruct<K>(keyspace: cache.StructKeyspace<K, any>, key: K): Promise<void> {
+  static async deleteStruct<K>(keyspace: StructKeyspace<K, any>, key: K): Promise<void> {
     try {
-      await keyspace.Delete(key);
-      logger.debug("Item deleted from cache", { keyspace: keyspace.Name, key });
+      await keyspace.delete(key);
+      logger.debug("Item deleted from cache", { keyspace: (keyspace as any).name, key });
     } catch (error) {
-      logger.error(error, "Error deleting item from cache", { keyspace: keyspace.Name, key });
+      logger.error(error as Error, "Error deleting item from cache", { keyspace: (keyspace as any).name, key });
     }
   }
 
   // --- String Keyspace Methods ---
   static async getString(key: GenericStringCacheKey): Promise<string | null> {
     try {
-      const value = await GenericStringKeyspace.Get(key);
+      const value = await GenericStringKeyspace.get(key);
       logger.debug("Cache hit (string)", { key });
       return value;
     } catch (error) {
-      if (error instanceof CacheOpError && error.message.includes("cache miss")) {
+      if (error instanceof CacheMissError && (error as any).code === 'MISS') {
         logger.debug("Cache miss (string)", { key });
       } else {
-        logger.error(error, "Error getting string from cache", { key });
+        logger.error(error as Error, "Error getting string from cache", { key });
       }
       return null;
     }
@@ -117,48 +118,48 @@ export class CacheService {
   static async setString(key: GenericStringCacheKey, value: string, ttl?: Duration): Promise<void> {
     try {
       if (ttl) {
-        await GenericStringKeyspace.With({ DefaultExpiry: ttl }).Set(key, value);
+        await GenericStringKeyspace.with({ defaultExpiry: ttl }).set(key, value);
       } else {
-        await GenericStringKeyspace.Set(key, value);
+        await GenericStringKeyspace.set(key, value);
       }
       logger.debug("String set in cache", { key, ttl: ttl?.toString() });
     } catch (error) {
-      logger.error(error, "Error setting string in cache", { key });
+      logger.error(error as Error, "Error setting string in cache", { key });
     }
   }
 
   static async deleteString(key: GenericStringCacheKey): Promise<void> {
     try {
-      await GenericStringKeyspace.Delete(key);
+      await GenericStringKeyspace.delete(key);
       logger.debug("String deleted from cache", { key });
     } catch (error) {
-      logger.error(error, "Error deleting string from cache", { key });
+      logger.error(error as Error, "Error deleting string from cache", { key });
     }
   }
 
   // --- Counter (Int) Keyspace Methods ---
   static async getCounter(key: CounterCacheKey): Promise<number | null> {
     try {
-      const value = await CounterKeyspace.Get(key);
+      const value = await CounterKeyspace.get(key);
       logger.debug("Cache hit (counter)", { key });
-      return Number(value); // Encore IntKeyspace might return int64 as string or BigInt in TS
+      return Number(value);
     } catch (error) {
-      if (error instanceof CacheOpError && error.message.includes("cache miss")) {
+      if (error instanceof CacheMissError && (error as any).code === 'MISS') {
         logger.debug("Cache miss (counter)", { key });
       } else {
-        logger.error(error, "Error getting counter from cache", { key });
+        logger.error(error as Error, "Error getting counter from cache", { key });
       }
       return null;
     }
   }
 
-  static async incrementCounter(key: CounterCacheKey, delta = 1): Promise<number | null> {
+  static async incrementCounter(key: CounterCacheKey, delta: number = 1): Promise<number | null> {
     try {
-      const newValue = await CounterKeyspace.Increment(key, BigInt(delta));
+      const newValue = await CounterKeyspace.increment(key, BigInt(delta));
       logger.debug("Counter incremented in cache", { key, delta, newValue: Number(newValue) });
       return Number(newValue);
     } catch (error) {
-      logger.error(error, "Error incrementing counter in cache", { key, delta });
+      logger.error(error as Error, "Error incrementing counter in cache", { key, delta });
       return null;
     }
   }
@@ -166,22 +167,22 @@ export class CacheService {
   static async setCounter(key: CounterCacheKey, value: number, ttl?: Duration): Promise<void> {
     try {
       if (ttl) {
-        await CounterKeyspace.With({ DefaultExpiry: ttl }).Set(key, BigInt(value));
+        await CounterKeyspace.with({ defaultExpiry: ttl }).set(key, BigInt(value));
       } else {
-        await CounterKeyspace.Set(key, BigInt(value));
+        await CounterKeyspace.set(key, BigInt(value));
       }
       logger.debug("Counter set in cache", { key, value, ttl: ttl?.toString() });
     } catch (error) {
-      logger.error(error, "Error setting counter in cache", { key, value });
+      logger.error(error as Error, "Error setting counter in cache", { key, value });
     }
   }
 
   static async deleteCounter(key: CounterCacheKey): Promise<void> {
     try {
-      await CounterKeyspace.Delete(key);
+      await CounterKeyspace.delete(key);
       logger.debug("Counter deleted from cache", { key });
     } catch (error) {
-      logger.error(error, "Error deleting counter from cache", { key });
+      logger.error(error as Error, "Error deleting counter from cache", { key });
     }
   }
 

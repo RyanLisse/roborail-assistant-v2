@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { MetricsCollector } from "../../monitoring/metrics";
+import { MetricHelpers } from "../../monitoring/metrics";
 import { type CacheConfig, getCacheConfig, validateCacheConfig } from "./config";
 import { getRedisClient } from "./redis.client";
 
@@ -44,7 +44,7 @@ export class MultiLevelEmbeddingCache {
     const memoryHit = this.memoryCache.get(key);
     if (memoryHit && Date.now() - memoryHit.timestamp < memoryHit.ttlMs) {
       console.log("Embedding cache L1 hit", { key: `${key.substring(0, 20)}...` });
-      MetricsRecorder.recordCacheHit("L1", key);
+      MetricHelpers.trackCacheHit("embedding", "L1");
       return memoryHit.data;
     }
 
@@ -60,7 +60,7 @@ export class MultiLevelEmbeddingCache {
         const redisHit = await this.redis.get(key);
         if (redisHit) {
           console.log("Embedding cache L2 hit", { key: key.substring(0, 20) + "..." });
-          MetricsRecorder.recordCacheHit("L2", key);
+          MetricHelpers.trackCacheHit("embedding", "L2");
           const data = JSON.parse(redisHit) as number[];
 
           // Refresh L1 cache with data from L2
@@ -77,7 +77,7 @@ export class MultiLevelEmbeddingCache {
     }
 
     console.log("Embedding cache miss (L1 & L2)", { key: key.substring(0, 20) + "..." });
-    MetricsRecorder.recordCacheMiss(key);
+    MetricHelpers.trackCacheMiss("embedding", "L1_L2");
     return null;
   }
 
@@ -118,7 +118,8 @@ export class MultiLevelEmbeddingCache {
           evictedKey: firstKey.substring(0, 20) + "...",
           newKey: key.substring(0, 20) + "...",
         });
-        MetricsRecorder.recordCacheEviction(firstKey, "LRU_eviction");
+        // Record cache eviction - using counter metric
+        MetricHelpers.trackCacheMiss("embedding", "L1"); // Eviction is effectively a miss
       }
     }
 

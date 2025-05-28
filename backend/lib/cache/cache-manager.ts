@@ -1,11 +1,8 @@
 import Redis from "ioredis";
 import type {
   CacheConfig,
-  CacheConnectionError,
-  CacheError,
   CacheHealth,
   CacheMetrics,
-  CacheSerializationError,
 } from "./types";
 
 // In-memory cache implementation using Map with LRU eviction
@@ -121,9 +118,26 @@ export class CacheManager {
   private l2Misses = 0;
   private cleanupInterval: NodeJS.Timeout | null = null;
 
-  constructor(config: CacheConfig) {
-    this.config = config;
-    this.l1Cache = new LRUCache(config.l1Cache.maxSize, config.l1Cache.ttl);
+  constructor(config?: CacheConfig) {
+    // Default configuration
+    this.config = config || {
+      redis: {
+        host: 'localhost',
+        port: 6379,
+        db: 0,
+        connectTimeout: 5000,
+        commandTimeout: 5000,
+      },
+      l1Cache: {
+        maxSize: 1000,
+        ttl: 300, // 5 minutes
+      },
+      l2Cache: {
+        ttl: 3600, // 1 hour
+      },
+      keyPrefix: 'search_cache:',
+    };
+    this.l1Cache = new LRUCache(this.config.l1Cache.maxSize, this.config.l1Cache.ttl);
 
     // Initialize Redis connection
     this.initializeRedis();
@@ -143,9 +157,9 @@ export class CacheManager {
         db: this.config.redis.db,
         connectTimeout: this.config.redis.connectTimeout,
         commandTimeout: this.config.redis.commandTimeout,
-        retryDelayOnFailover: 100,
         enableReadyCheck: true,
         maxRetriesPerRequest: 3,
+        lazyConnect: true,
       });
 
       this.l2Cache.on("error", (error) => {
@@ -310,7 +324,7 @@ export class CacheManager {
       }
 
       if (this.l2Cache) {
-        await this.l2Cache.disconnect();
+        this.l2Cache.disconnect();
         this.l2Cache = null;
       }
     } catch (error) {

@@ -258,6 +258,18 @@ function generateFollowUpQuestions(
   return uniqueQuestions.slice(0, maxQuestions);
 }
 
+function hasNearbyCitation(text: string, indicator: string): boolean {
+  const indicatorIndex = text.toLowerCase().indexOf(indicator.toLowerCase());
+  if (indicatorIndex === -1) return false;
+
+  // Check for citations within 100 characters before or after the indicator
+  const start = Math.max(0, indicatorIndex - 100);
+  const end = Math.min(text.length, indicatorIndex + indicator.length + 100);
+  const surroundingText = text.slice(start, end);
+
+  return surroundingText.match(/\[\d+\]/) !== null || surroundingText.match(/\[[^\]]+\]/) !== null;
+}
+
 function validateCitations(
   responseText: string,
   availableSources: string[]
@@ -314,8 +326,8 @@ function validateCitations(
 
   for (const indicator of claimIndicators) {
     if (responseText.toLowerCase().includes(indicator)) {
-      const hasNearbyCitation = hasNearbyCitation(responseText, indicator);
-      if (!hasNearbyCitation) {
+      const isCited = hasNearbyCitation(responseText, indicator);
+      if (!isCited) {
         warnings.push(`Claim with "${indicator}" may need a citation for verification`);
       }
     }
@@ -341,18 +353,6 @@ function validateCitations(
     warnings,
     suggestions,
   };
-}
-
-function hasNearbyCitation(text: string, indicator: string): boolean {
-  const indicatorIndex = text.toLowerCase().indexOf(indicator.toLowerCase());
-  if (indicatorIndex === -1) return false;
-
-  // Check for citations within 100 characters before or after the indicator
-  const start = Math.max(0, indicatorIndex - 100);
-  const end = Math.min(text.length, indicatorIndex + indicator.length + 100);
-  const surroundingText = text.slice(start, end);
-
-  return surroundingText.match(/\[\d+\]/) !== null || surroundingText.match(/\[[^\]]+\]/) !== null;
 }
 
 function formatCitationsForDisplay(

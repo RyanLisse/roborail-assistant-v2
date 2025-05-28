@@ -18,17 +18,25 @@ export const CONTEXT_LIMITS = {
 // Replace all usages of z.infer<typeof ...> in API signatures with these interfaces.
 // If runtime validation is needed, use zod inside the function body, not in the signature.
 
-// Schema for context management options
-export const ContextOptions = {
+// Schema for context management options (use this as the object for defaults)
+export const DefaultContextOptions = {
   maxMessages: CONTEXT_LIMITS.MAX_MESSAGES,
   maxContextChars: CONTEXT_LIMITS.MAX_CONTEXT_CHARS,
   maxContextTokens: CONTEXT_LIMITS.MAX_CONTEXT_TOKENS,
   minRecentMessages: CONTEXT_LIMITS.MIN_RECENT_MESSAGES,
   prioritizeRecent: true,
   includeSystemMessages: true,
-};
+} as const; // Keep as const for the default object values
 
-export type ContextOptionsType = typeof ContextOptions;
+// Define the type with general number/boolean types for flexibility
+export interface ContextOptionsType {
+  maxMessages: number;
+  maxContextChars: number;
+  maxContextTokens: number;
+  minRecentMessages: number;
+  prioritizeRecent: boolean;
+  includeSystemMessages: boolean;
+}
 
 // Define DbCitation interface matching DB schema
 export interface DbCitation {
@@ -174,7 +182,7 @@ export function pruneConversationHistory(
   messages: ConversationMessage[],
   options: Partial<ContextOptionsType> = {}
 ): ConversationMessage[] {
-  const opts = { ...ContextOptions, ...options };
+  const opts = { ...DefaultContextOptions, ...options };
 
   if (messages.length === 0) {
     return [];
@@ -287,7 +295,7 @@ export function manageRAGContext(
   totalTokens: number;
   availableTokensForResponse: number;
 } {
-  const opts = { ...ContextOptions, ...options };
+  const opts = { ...DefaultContextOptions, ...options };
 
   // Reserve tokens for document context and response
   const documentTokens = estimateTokenCount(documentContext);

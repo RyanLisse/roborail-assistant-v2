@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
-  backendClient, 
-  type ChatRequest, 
+import { encoreClient } from '@/lib/api/encore-client'
+import {
+  type ChatRequest,
   type ChatResponse,
   type ConversationResponse,
   type ConversationWithMessages,
-  type MessageResponse 
+  type MessageResponse
 } from '@/lib/api/backend-client'
 
 // Query keys factory for consistent key generation
@@ -34,7 +34,7 @@ export function useConversations(
 
   return useQuery({
     queryKey: [...chatKeys.conversations(userId), { page, pageSize, search }],
-    queryFn: () => backendClient.listConversations(userId, page, pageSize, search),
+    queryFn: () => encoreClient.chat.listConversations({ userId, page, pageSize, search }),
     enabled: enabled && !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -54,7 +54,7 @@ export function useConversation(conversationId: string, userId: string, enabled 
 export function useConversationMessages(conversationId: string, userId: string, enabled = true) {
   return useQuery({
     queryKey: chatKeys.messages(conversationId, userId),
-    queryFn: () => backendClient.getConversationMessages(conversationId, userId),
+    queryFn: () => encoreClient.chat.getMessages(conversationId, userId),
     enabled: enabled && !!conversationId && !!userId,
     staleTime: 1 * 60 * 1000, // 1 minute
   })
@@ -64,7 +64,7 @@ export function useConversationMessages(conversationId: string, userId: string, 
 export function useChatHealth() {
   return useQuery({
     queryKey: chatKeys.health(),
-    queryFn: () => backendClient.healthCheck(),
+    queryFn: () => encoreClient.chat.healthCheck(),
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 60 * 1000, // Refetch every minute
   })
