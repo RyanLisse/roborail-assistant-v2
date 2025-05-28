@@ -1,7 +1,7 @@
 "use client";
 
 import { useDebouncedDocumentSearch } from "@/hooks";
-import { type SearchResult } from "@/lib/api/backend-client";
+import type { SearchResult } from "@/lib/api/backend-client";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -39,7 +39,7 @@ export function KnowledgeSearch({ onResultSelect, className }: KnowledgeSearchPr
     return `${Math.round(score * 100)}%`;
   };
 
-  const truncateText = (text: string, maxLength: number = 200) => {
+  const truncateText = (text: string, maxLength = 200) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + "...";
   };

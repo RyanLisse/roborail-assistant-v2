@@ -1,11 +1,11 @@
+import { and, desc, eq, gte, inArray, lt, lte } from "drizzle-orm";
 import { api } from "encore.dev/api";
 import { db } from "../db/connection";
-import { 
-  documentProcessingStatus, 
+import {
   type DocumentProcessingStatus,
-  type NewDocumentProcessingStatus
+  type NewDocumentProcessingStatus,
+  documentProcessingStatus,
 } from "../db/schema";
-import { eq, and, desc, lt, gte, lte, inArray } from "drizzle-orm";
 
 // Type aliases for cleaner usage
 export type ProcessingStageType = "upload" | "parsing" | "chunking" | "embedding" | "indexing";
@@ -29,7 +29,7 @@ export interface ProcessingStatus {
 }
 
 export interface StageStatus {
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: "pending" | "in_progress" | "completed" | "failed";
   startedAt?: string;
   completedAt?: string;
   errorMessage?: string;
@@ -59,7 +59,7 @@ export interface ProcessingError {
 export interface StatusUpdateRequest {
   documentId: string;
   stage: ProcessingStageType;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: "pending" | "in_progress" | "completed" | "failed";
   progress?: number;
   details?: string;
   error?: Partial<ProcessingError>;
@@ -109,15 +109,21 @@ export interface StagePerformance {
 }
 
 // Stage progression order
-const STAGE_ORDER: ProcessingStageType[] = ['upload', 'parsing', 'chunking', 'embedding', 'indexing'];
+const STAGE_ORDER: ProcessingStageType[] = [
+  "upload",
+  "parsing",
+  "chunking",
+  "embedding",
+  "indexing",
+];
 
 // Processing duration estimates (in milliseconds)
 const BASE_PROCESSING_TIMES: Record<ProcessingStageType, number> = {
-  upload: 2000,      // 2 seconds
-  parsing: 5000,     // 5 seconds base
-  chunking: 3000,    // 3 seconds
-  embedding: 8000,   // 8 seconds base
-  indexing: 1500,    // 1.5 seconds
+  upload: 2000, // 2 seconds
+  parsing: 5000, // 5 seconds base
+  chunking: 3000, // 3 seconds
+  embedding: 8000, // 8 seconds base
+  indexing: 1500, // 1.5 seconds
 };
 
 // Create initial processing status for a new document
@@ -130,7 +136,7 @@ export const createProcessingStatus = api(
   }): Promise<ProcessingStatus> => {
     try {
       const now = new Date();
-      
+
       // Calculate estimated durations based on file size
       const fileSize = request.metadata.totalSize || 1024 * 1024; // Default 1MB
       const sizeMultiplier = Math.max(1, fileSize / (1024 * 1024)); // Scale by MB
@@ -143,33 +149,33 @@ export const createProcessingStatus = api(
       };
 
       const statusId = `status_${request.documentId}_${Date.now()}`;
-      
+
       // Create processing status record
       const statusData: NewDocumentProcessingStatus = {
         id: statusId,
         documentId: request.documentId,
         userId: request.userId,
-        currentStage: 'upload',
-        overallStatus: 'pending',
+        currentStage: "upload",
+        overallStatus: "pending",
         stages: {
-          upload: { 
-            status: 'pending',
+          upload: {
+            status: "pending",
             estimatedDuration: estimatedDurations.upload,
           },
-          parsing: { 
-            status: 'pending',
+          parsing: {
+            status: "pending",
             estimatedDuration: estimatedDurations.parsing,
           },
-          chunking: { 
-            status: 'pending',
+          chunking: {
+            status: "pending",
             estimatedDuration: estimatedDurations.chunking,
           },
-          embedding: { 
-            status: 'pending',
+          embedding: {
+            status: "pending",
             estimatedDuration: estimatedDurations.embedding,
           },
-          indexing: { 
-            status: 'pending',
+          indexing: {
+            status: "pending",
             estimatedDuration: estimatedDurations.indexing,
           },
         },
@@ -188,8 +194,8 @@ export const createProcessingStatus = api(
       return {
         documentId: request.documentId,
         userId: request.userId,
-        currentStage: 'upload',
-        overallStatus: 'pending',
+        currentStage: "upload",
+        overallStatus: "pending",
         stages: statusData.stages,
         metadata: statusData.metadata,
         createdAt: now,
@@ -198,10 +204,11 @@ export const createProcessingStatus = api(
         retryCount: 0,
         maxRetries: 3,
       };
-
     } catch (error) {
-      console.error('Error creating processing status:', error);
-      throw new Error(`Failed to create processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error creating processing status:", error);
+      throw new Error(
+        `Failed to create processing status: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -233,19 +240,20 @@ export const updateProcessingStatus = api(
       };
 
       // Set timestamps based on status
-      if (request.status === 'in_progress' && !updatedStage.startedAt) {
+      if (request.status === "in_progress" && !updatedStage.startedAt) {
         updatedStage.startedAt = now.toISOString();
       }
-      if (request.status === 'completed') {
+      if (request.status === "completed") {
         updatedStage.completedAt = now.toISOString();
         if (updatedStage.startedAt) {
-          updatedStage.actualDuration = new Date(now).getTime() - new Date(updatedStage.startedAt).getTime();
+          updatedStage.actualDuration =
+            new Date(now).getTime() - new Date(updatedStage.startedAt).getTime();
         }
       }
 
       // Handle errors
-      if (request.status === 'failed' && request.error) {
-        updatedStage.errorMessage = request.error.message || 'Processing failed';
+      if (request.status === "failed" && request.error) {
+        updatedStage.errorMessage = request.error.message || "Processing failed";
         updatedStage.retryCount = (updatedStage.retryCount || 0) + 1;
       }
 
@@ -256,23 +264,23 @@ export const updateProcessingStatus = api(
       let newOverallStatus = currentStatus.overallStatus;
       let completedAt = currentStatus.completedAt;
 
-      if (request.status === 'completed') {
+      if (request.status === "completed") {
         // Move to next stage if current stage is completed
         const currentStageIndex = STAGE_ORDER.indexOf(request.stage);
         const nextStageIndex = currentStageIndex + 1;
-        
+
         if (nextStageIndex < STAGE_ORDER.length) {
           newCurrentStage = STAGE_ORDER[nextStageIndex];
-          newOverallStatus = 'processing';
+          newOverallStatus = "processing";
         } else {
           // All stages completed
-          newOverallStatus = 'completed';
+          newOverallStatus = "completed";
           completedAt = now;
         }
-      } else if (request.status === 'failed') {
-        newOverallStatus = 'failed';
-      } else if (request.status === 'in_progress') {
-        newOverallStatus = 'in_progress';
+      } else if (request.status === "failed") {
+        newOverallStatus = "failed";
+      } else if (request.status === "in_progress") {
+        newOverallStatus = "in_progress";
       }
 
       // Update database
@@ -282,7 +290,10 @@ export const updateProcessingStatus = api(
         stages: stages,
         updatedAt: now,
         completedAt,
-        errorMessage: request.status === 'failed' && updatedStage.errorMessage ? updatedStage.errorMessage : currentStatus.errorMessage,
+        errorMessage:
+          request.status === "failed" && updatedStage.errorMessage
+            ? updatedStage.errorMessage
+            : currentStatus.errorMessage,
         retryCount: updatedStage.retryCount || currentStatus.retryCount,
       };
 
@@ -291,7 +302,9 @@ export const updateProcessingStatus = api(
         .set(updateData)
         .where(eq(documentProcessingStatus.documentId, request.documentId));
 
-      console.log(`Updated processing status for document ${request.documentId}, stage ${request.stage} to ${request.status}`);
+      console.log(
+        `Updated processing status for document ${request.documentId}, stage ${request.stage} to ${request.status}`
+      );
 
       // Return updated status
       return {
@@ -304,14 +317,18 @@ export const updateProcessingStatus = api(
         createdAt: currentStatus.createdAt,
         updatedAt: now,
         completedAt,
-        progressPercentage: request.status === 'completed' ? 100 : (request.progress || currentStatus.progressPercentage),
+        progressPercentage:
+          request.status === "completed"
+            ? 100
+            : request.progress || currentStatus.progressPercentage,
         retryCount: updatedStage.retryCount || currentStatus.retryCount,
         maxRetries: currentStatus.maxRetries,
       };
-
     } catch (error) {
-      console.error('Error updating processing status:', error);
-      throw new Error(`Failed to update processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error updating processing status:", error);
+      throw new Error(
+        `Failed to update processing status: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -336,21 +353,24 @@ export const getProcessingStatus = api(
         createdAt: status.createdAt,
         updatedAt: status.updatedAt,
         completedAt: status.completedAt || undefined,
-        error: status.errorMessage ? {
-          code: 'PROCESSING_ERROR',
-          message: status.errorMessage,
-          stage: status.currentStage as ProcessingStageType,
-          timestamp: status.updatedAt,
-          retryable: status.retryCount < status.maxRetries,
-        } : undefined,
+        error: status.errorMessage
+          ? {
+              code: "PROCESSING_ERROR",
+              message: status.errorMessage,
+              stage: status.currentStage as ProcessingStageType,
+              timestamp: status.updatedAt,
+              retryable: status.retryCount < status.maxRetries,
+            }
+          : undefined,
         progressPercentage: status.progressPercentage,
         retryCount: status.retryCount,
         maxRetries: status.maxRetries,
       };
-
     } catch (error) {
-      console.error('Error getting processing status:', error);
-      throw new Error(`Failed to get processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error getting processing status:", error);
+      throw new Error(
+        `Failed to get processing status: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -365,7 +385,7 @@ export const queryProcessingStatuses = api(
 
       // Build where conditions
       const conditions = [];
-      
+
       if (query.documentId) {
         conditions.push(eq(documentProcessingStatus.documentId, query.documentId));
       }
@@ -393,7 +413,7 @@ export const queryProcessingStatuses = api(
       const resultStatuses = hasMore ? statuses.slice(0, -1) : statuses;
 
       // Format results
-      const formattedStatuses: ProcessingStatus[] = resultStatuses.map(status => ({
+      const formattedStatuses: ProcessingStatus[] = resultStatuses.map((status) => ({
         documentId: status.documentId,
         userId: status.userId,
         currentStage: status.currentStage as ProcessingStageType,
@@ -403,13 +423,15 @@ export const queryProcessingStatuses = api(
         createdAt: status.createdAt,
         updatedAt: status.updatedAt,
         completedAt: status.completedAt || undefined,
-        error: status.errorMessage ? {
-          code: 'PROCESSING_ERROR',
-          message: status.errorMessage,
-          stage: status.currentStage as ProcessingStageType,
-          timestamp: status.updatedAt,
-          retryable: status.retryCount < status.maxRetries,
-        } : undefined,
+        error: status.errorMessage
+          ? {
+              code: "PROCESSING_ERROR",
+              message: status.errorMessage,
+              stage: status.currentStage as ProcessingStageType,
+              timestamp: status.updatedAt,
+              retryable: status.retryCount < status.maxRetries,
+            }
+          : undefined,
         progressPercentage: status.progressPercentage,
         retryCount: status.retryCount,
         maxRetries: status.maxRetries,
@@ -420,10 +442,11 @@ export const queryProcessingStatuses = api(
         total: formattedStatuses.length,
         hasMore,
       };
-
     } catch (error) {
-      console.error('Error querying processing statuses:', error);
-      throw new Error(`Failed to query processing statuses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error querying processing statuses:", error);
+      throw new Error(
+        `Failed to query processing statuses: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -464,7 +487,7 @@ export const retryProcessingFromStage = api(
       // Reset stage status for retry
       stages[fromStage] = {
         ...stageStatus,
-        status: 'pending',
+        status: "pending",
         errorMessage: undefined,
         retryCount: currentRetryCount + 1,
         startedAt: undefined,
@@ -477,7 +500,7 @@ export const retryProcessingFromStage = api(
         .update(documentProcessingStatus)
         .set({
           currentStage: fromStage,
-          overallStatus: 'pending',
+          overallStatus: "pending",
           stages: stages,
           updatedAt: now,
           errorMessage: null,
@@ -485,7 +508,9 @@ export const retryProcessingFromStage = api(
         })
         .where(eq(documentProcessingStatus.documentId, request.documentId));
 
-      console.log(`Retrying processing for document ${request.documentId} from stage ${fromStage} (attempt ${currentRetryCount + 1})`);
+      console.log(
+        `Retrying processing for document ${request.documentId} from stage ${fromStage} (attempt ${currentRetryCount + 1})`
+      );
 
       const newStatus = await getProcessingStatus(request.documentId);
 
@@ -495,10 +520,11 @@ export const retryProcessingFromStage = api(
         newStatus,
         success: true,
       };
-
     } catch (error) {
-      console.error('Error retrying processing:', error);
-      throw new Error(`Failed to retry processing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrying processing:", error);
+      throw new Error(
+        `Failed to retry processing: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -509,13 +535,13 @@ export const cancelProcessing = api(
   async (request: { documentId: string; reason?: string }): Promise<ProcessingStatus> => {
     try {
       const now = new Date();
-      const reason = request.reason || 'Processing cancelled by user';
+      const reason = request.reason || "Processing cancelled by user";
 
       // Update status to cancelled
       await db
         .update(documentProcessingStatus)
         .set({
-          overallStatus: 'cancelled',
+          overallStatus: "cancelled",
           updatedAt: now,
           errorMessage: reason,
         })
@@ -524,10 +550,11 @@ export const cancelProcessing = api(
       console.log(`Cancelled processing for document ${request.documentId}: ${reason}`);
 
       return await getProcessingStatus(request.documentId);
-
     } catch (error) {
-      console.error('Error cancelling processing:', error);
-      throw new Error(`Failed to cancel processing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error cancelling processing:", error);
+      throw new Error(
+        `Failed to cancel processing: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -541,7 +568,9 @@ export const getProcessingMetrics = api(
     userId?: string;
   }): Promise<ProcessingMetrics> => {
     try {
-      const startDate = query.startDate ? new Date(query.startDate) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const startDate = query.startDate
+        ? new Date(query.startDate)
+        : new Date(Date.now() - 24 * 60 * 60 * 1000);
       const endDate = query.endDate ? new Date(query.endDate) : new Date();
 
       // Build where conditions
@@ -562,17 +591,23 @@ export const getProcessingMetrics = api(
 
       // Calculate metrics
       const totalDocuments = statuses.length;
-      const completedDocuments = statuses.filter(s => s.overallStatus === 'completed').length;
-      const failedDocuments = statuses.filter(s => s.overallStatus === 'failed').length;
+      const completedDocuments = statuses.filter((s) => s.overallStatus === "completed").length;
+      const failedDocuments = statuses.filter((s) => s.overallStatus === "failed").length;
 
       // Calculate average processing time for completed documents
-      const completedStatuses = statuses.filter(s => s.overallStatus === 'completed' && s.completedAt);
-      const averageProcessingTime = completedStatuses.length > 0
-        ? completedStatuses.reduce((sum, s) => sum + (s.completedAt!.getTime() - s.createdAt.getTime()), 0) / completedStatuses.length
-        : 0;
+      const completedStatuses = statuses.filter(
+        (s) => s.overallStatus === "completed" && s.completedAt
+      );
+      const averageProcessingTime =
+        completedStatuses.length > 0
+          ? completedStatuses.reduce(
+              (sum, s) => sum + (s.completedAt!.getTime() - s.createdAt.getTime()),
+              0
+            ) / completedStatuses.length
+          : 0;
 
       // Calculate stage performance (simplified for now)
-      const stagePerformance: StagePerformance[] = STAGE_ORDER.map(stage => ({
+      const stagePerformance: StagePerformance[] = STAGE_ORDER.map((stage) => ({
         stage,
         averageTime: BASE_PROCESSING_TIMES[stage] || 5000,
         successRate: 0.95, // Mock success rate
@@ -586,10 +621,11 @@ export const getProcessingMetrics = api(
         averageProcessingTime,
         stagePerformance,
       };
-
     } catch (error) {
-      console.error('Error getting processing metrics:', error);
-      throw new Error(`Failed to get processing metrics: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error getting processing metrics:", error);
+      throw new Error(
+        `Failed to get processing metrics: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -602,35 +638,40 @@ export async function cleanupOldProcessingStatuses(beforeDate: Date): Promise<nu
       .where(
         and(
           lte(documentProcessingStatus.createdAt, beforeDate),
-          inArray(documentProcessingStatus.overallStatus, ['completed', 'failed', 'cancelled'])
+          inArray(documentProcessingStatus.overallStatus, ["completed", "failed", "cancelled"])
         )
       );
 
     console.log(`Cleaned up old processing statuses before ${beforeDate.toISOString()}`);
     return result.rowsAffected || 0;
-
   } catch (error) {
-    console.error('Error cleaning up processing statuses:', error);
-    throw new Error(`Failed to cleanup processing statuses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("Error cleaning up processing statuses:", error);
+    throw new Error(
+      `Failed to cleanup processing statuses: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
 // Helper function to estimate processing time based on file characteristics
-export function estimateProcessingTime(fileSize: number, contentType: string, processingMode: string = 'standard'): number {
+export function estimateProcessingTime(
+  fileSize: number,
+  contentType: string,
+  processingMode = "standard"
+): number {
   const baseTime = 10000; // 10 seconds base
   const sizeMultiplier = Math.max(1, fileSize / (1024 * 1024)); // Scale by MB
-  
+
   let complexityMultiplier = 1;
-  if (contentType === 'application/pdf') {
+  if (contentType === "application/pdf") {
     complexityMultiplier = 1.5; // PDFs are more complex
-  } else if (contentType.includes('word')) {
+  } else if (contentType.includes("word")) {
     complexityMultiplier = 1.2; // DOCX files
   }
 
   let modeMultiplier = 1;
-  if (processingMode === 'detailed') {
+  if (processingMode === "detailed") {
     modeMultiplier = 2;
-  } else if (processingMode === 'fast') {
+  } else if (processingMode === "fast") {
     modeMultiplier = 0.5;
   }
 

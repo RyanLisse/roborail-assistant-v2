@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { 
-  createDocumentSchema, 
-  createDocumentChunkSchema, 
-  createConversationSchema, 
-  createMessageSchema,
+import { describe, expect, it } from "vitest";
+import {
   DocumentStatus,
-  MessageRole 
+  MessageRole,
+  createConversationSchema,
+  createDocumentChunkSchema,
+  createDocumentSchema,
+  createMessageSchema,
 } from "./schema";
 
 describe("Database Schema Validation", () => {
@@ -49,12 +49,12 @@ describe("Database Schema Validation", () => {
       const validStatuses = ["uploaded", "processing", "processed", "failed"];
       const invalidStatuses = ["pending", "invalid", ""];
 
-      validStatuses.forEach(status => {
+      validStatuses.forEach((status) => {
         const result = DocumentStatus.safeParse(status);
         expect(result.success).toBe(true);
       });
 
-      invalidStatuses.forEach(status => {
+      invalidStatuses.forEach((status) => {
         const result = DocumentStatus.safeParse(status);
         expect(result.success).toBe(false);
       });
@@ -176,12 +176,12 @@ describe("Database Schema Validation", () => {
       const validRoles = ["user", "assistant"];
       const invalidRoles = ["system", "admin", ""];
 
-      validRoles.forEach(role => {
+      validRoles.forEach((role) => {
         const result = MessageRole.safeParse(role);
         expect(result.success).toBe(true);
       });
 
-      invalidRoles.forEach(role => {
+      invalidRoles.forEach((role) => {
         const result = MessageRole.safeParse(role);
         expect(result.success).toBe(false);
       });
@@ -193,20 +193,24 @@ describe("Database Schema Validation", () => {
         conversationId: "conv-456",
         role: "assistant" as const,
         content: "The answer is...",
-        citations: [{
-          documentId: "doc-123",
-          filename: "test.pdf",
-          chunkContent: "Relevant content",
-          relevanceScore: 0.85, // Valid score between 0 and 1
-        }],
+        citations: [
+          {
+            documentId: "doc-123",
+            filename: "test.pdf",
+            chunkContent: "Relevant content",
+            relevanceScore: 0.85, // Valid score between 0 and 1
+          },
+        ],
       };
 
       const messageWithInvalidCitation = {
         ...messageWithValidCitation,
-        citations: [{
-          ...messageWithValidCitation.citations[0],
-          relevanceScore: 1.5, // Invalid score > 1
-        }],
+        citations: [
+          {
+            ...messageWithValidCitation.citations[0],
+            relevanceScore: 1.5, // Invalid score > 1
+          },
+        ],
       };
 
       expect(createMessageSchema.safeParse(messageWithValidCitation).success).toBe(true);
@@ -235,7 +239,7 @@ describe("Database Schema Validation", () => {
       // This test ensures our types are properly inferred
       const docData = createDocumentSchema.parse({
         id: "doc-123",
-        userId: "user-456", 
+        userId: "user-456",
         filename: "test.pdf",
         originalName: "Test.pdf",
         contentType: "application/pdf",

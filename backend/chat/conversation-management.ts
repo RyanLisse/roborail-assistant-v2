@@ -1,178 +1,241 @@
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { api } from "encore.dev/api";
-import { db } from "../db/client";
-import { 
-  conversations, 
-  conversationMessages, 
-  NewConversation, 
-  NewConversationMessage,
-  Conversation,
-  ConversationMessage
-} from "../db/schema";
-import { eq, and, desc, sql, count } from "drizzle-orm";
-import { z } from "zod";
+import log from "encore.dev/log"; // Assuming log is not already imported or use existing one
 import { v4 as uuidv4 } from "uuid";
-import { 
-  pruneConversationHistory,
-  manageRAGContext,
-  analyzeConversationPatterns,
-  ContextOptions,
-  type ContextOptionsType
-} from "./context-management";
+import { db } from "../db/client";
+import {
+  type NewConversation,
+  type NewConversationMessage,
+  conversationMessages,
+  conversations,
+} from "../db/schema";
 import { CacheService } from "../lib/cache/cache.service";
-import { ConversationKeyspace, type ConversationCacheKey } from "../lib/infrastructure/cache/cache";
 import type { PlaceholderConversationObject } from "../lib/cache/cache.service"; // Corrected import
+import type { ConversationCacheKey } from "../lib/infrastructure/cache/cache";
+import {
+  type ContextOptionsType,
+  analyzeConversationPatterns,
+  manageRAGContext,
+  pruneConversationHistory,
+} from "./context-management";
+
+// Define explicit interfaces for CreateConversationRequest, ConversationResponse, etc.
+// Replace all usages of z.infer<typeof ...> in API signatures with these interfaces.
+// If runtime validation is needed, use zod inside the function body, not in the signature.
 
 // Request/Response schemas
-export const CreateConversationRequest = z.object({
-  title: z.string().min(1).max(200).optional(),
-  firstMessage: z.string().min(1).optional(),
-});
+export interface CreateConversationRequest {
+  title?: string;
+  firstMessage?: string;
+}
 
-export const GetConversationRequest = z.object({
-  conversationId: z.string().min(1),
-  userId: z.string().min(1),
-});
+export interface GetConversationRequest {
+  conversationId: string;
+  userId: string;
+}
 
-export const ListConversationsRequest = z.object({
-  userId: z.string().min(1),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-});
+export interface ListConversationsRequest {
+  userId: string;
+  page: number;
+  pageSize: number;
+  search?: string;
+}
 
-export const AddMessageRequest = z.object({
-  conversationId: z.string().min(1),
-  userId: z.string().min(1),
-  role: z.enum(["user", "assistant"]),
-  content: z.string().min(1),
-  citations: z.array(z.object({
-    documentId: z.string(),
-    filename: z.string(),
-    pageNumber: z.number().int().positive().optional(),
-    chunkContent: z.string(),
-    relevanceScore: z.number().min(0).max(1),
-  })).default([]),
-});
+export interface AddMessageRequest {
+  conversationId: string;
+  userId: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: {
+    documentId: string;
+    filename: string;
+    pageNumber?: number;
+    chunkContent: string;
+    relevanceScore: number;
+  }[];
+}
 
-export const UpdateConversationTitleRequest = z.object({
-  conversationId: z.string().min(1),
-  userId: z.string().min(1),
-  title: z.string().min(1).max(200),
-});
+export interface UpdateConversationTitleRequest {
+  conversationId: string;
+  userId: string;
+  title: string;
+}
 
-export const GetPrunedHistoryRequest = z.object({
-  conversationId: z.string().min(1),
-  userId: z.string().min(1),
-  contextOptions: ContextOptions.partial().optional(),
-});
+export interface SaveConversationDraftRequest {
+  conversationId: string;
+  userId: string;
+  draftPayload: {
+    currentMessage?: string;
+    // other draft-specific fields if any
+  };
+}
 
-export const AnalyzeConversationRequest = z.object({
-  conversationId: z.string().min(1),
-  userId: z.string().min(1),
-});
+export interface GetPrunedHistoryRequest {
+  conversationId: string;
+  userId: string;
+  contextOptions?: Partial<ContextOptionsType>;
+}
 
-export const ConversationResponse = z.object({
-  id: z.string(),
-  userId: z.string(),
-  title: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  messageCount: z.number().optional(),
-});
+export interface AnalyzeConversationRequest {
+  conversationId: string;
+  userId: string;
+}
 
-export const ConversationWithMessagesResponse = z.object({
-  id: z.string(),
-  userId: z.string(),
-  title: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  messages: z.array(z.object({
-    id: z.string(),
-    role: z.enum(["user", "assistant"]),
-    content: z.string(),
-    citations: z.array(z.object({
-      documentId: z.string(),
-      filename: z.string(),
-      pageNumber: z.number().optional(),
-      chunkContent: z.string(),
-      relevanceScore: z.number(),
-    })),
-    createdAt: z.date(),
-  })),
-});
+export interface ConversationResponse {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  messageCount?: number;
+}
 
-export const ListConversationsResponse = z.object({
-  conversations: z.array(ConversationResponse),
-  pagination: z.object({
-    total: z.number(),
-    page: z.number(),
-    pageSize: z.number(),
-    totalPages: z.number(),
-  }),
-});
+export interface ConversationWithMessagesResponse {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  messages: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    citations: {
+      documentId: string;
+      filename: string;
+      pageNumber?: number;
+      chunkContent: string;
+      relevanceScore: number;
+    }[];
+    createdAt: Date;
+  }[];
+}
 
-export const MessageResponse = z.object({
-  id: z.string(),
-  conversationId: z.string(),
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-  citations: z.array(z.object({
-    documentId: z.string(),
-    filename: z.string(),
-    pageNumber: z.number().optional(),
-    chunkContent: z.string(),
-    relevanceScore: z.number(),
-  })),
-  createdAt: z.date(),
-});
+export interface ListConversationsResponse {
+  conversations: ConversationResponse[];
+  pagination: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+}
 
-export const PrunedHistoryResponse = z.object({
-  messages: z.array(MessageResponse),
-  contextSummary: z.string(),
-  totalTokens: z.number(),
-  originalMessageCount: z.number(),
-  prunedMessageCount: z.number(),
-});
+export interface MessageResponse {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: {
+    documentId: string;
+    filename: string;
+    pageNumber?: number;
+    chunkContent: string;
+    relevanceScore: number;
+  }[];
+  createdAt: Date;
+}
 
-export const ConversationAnalysisResponse = z.object({
-  topicClusters: z.array(z.string()),
-  keyEntities: z.array(z.string()),
-  conversationTrends: z.array(z.string()),
-  messageCount: z.number(),
-  averageMessageLength: z.number(),
-  totalCharacters: z.number(),
-});
+export interface PrunedHistoryResponse {
+  messages: MessageResponse[];
+  contextSummary: string;
+  totalTokens: number;
+  originalMessageCount: number;
+  prunedMessageCount: number;
+}
+
+export interface ConversationAnalysisResponse {
+  topicClusters: string[];
+  keyEntities: string[];
+  conversationTrends: string[];
+  messageCount: number;
+  averageMessageLength: number;
+  totalCharacters: number;
+}
 
 // Helper function to generate conversation title from first message
 function generateConversationTitle(firstMessage: string): string {
   // Extract key terms and create a concise title
-  const words = firstMessage.toLowerCase()
-    .replace(/[^\w\s]/g, '')
+  const words = firstMessage
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
     .split(/\s+/)
-    .filter(word => word.length > 3 && !isCommonWord(word));
-  
+    .filter((word) => word.length > 3 && !isCommonWord(word));
+
   const keywords = words.slice(0, 3);
-  let title = keywords.join(' ');
-  
+  let title = keywords.join(" ");
+
   if (title.length === 0) {
     title = "New Conversation";
   } else if (title.length > 50) {
-    title = title.substring(0, 47) + "...";
+    title = `${title.substring(0, 47)}...`;
   } else {
-    title = title.charAt(0).toUpperCase() + title.slice(1);
+    title = `${title.charAt(0).toUpperCase()}${title.slice(1)}`;
   }
-  
+
   return title;
 }
 
 function isCommonWord(word: string): boolean {
   const commonWords = new Set([
-    'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 
-    'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 
-    'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 
-    'did', 'why', 'let', 'put', 'say', 'she', 'too', 'use', 'what', 'when',
-    'with', 'have', 'this', 'will', 'your', 'from', 'they', 'know', 'want',
-    'been', 'good', 'much', 'some', 'time', 'very', 'come', 'here', 'just'
+    "the",
+    "and",
+    "for",
+    "are",
+    "but",
+    "not",
+    "you",
+    "all",
+    "can",
+    "had",
+    "her",
+    "was",
+    "one",
+    "our",
+    "out",
+    "day",
+    "get",
+    "has",
+    "him",
+    "his",
+    "how",
+    "its",
+    "may",
+    "new",
+    "now",
+    "old",
+    "see",
+    "two",
+    "who",
+    "boy",
+    "did",
+    "why",
+    "let",
+    "put",
+    "say",
+    "she",
+    "too",
+    "use",
+    "what",
+    "when",
+    "with",
+    "have",
+    "this",
+    "will",
+    "your",
+    "from",
+    "they",
+    "know",
+    "want",
+    "been",
+    "good",
+    "much",
+    "some",
+    "time",
+    "very",
+    "come",
+    "here",
+    "just",
   ]);
   return commonWords.has(word);
 }
@@ -182,21 +245,22 @@ function isCommonWord(word: string): boolean {
 // Create a new conversation
 export const createConversation = api(
   { method: "POST", path: "/chat/conversations", expose: true },
-  async ({ title, firstMessage }: z.infer<typeof CreateConversationRequest>): Promise<z.infer<typeof ConversationResponse>> => {
+  async ({ title, firstMessage }: CreateConversationRequest): Promise<ConversationResponse> => {
     const conversationId = uuidv4();
-    
+
     // Auto-generate title from first message if not provided
-    const conversationTitle = title || (firstMessage ? generateConversationTitle(firstMessage) : "New Conversation");
-    
+    const conversationTitle =
+      title || (firstMessage ? generateConversationTitle(firstMessage) : "New Conversation");
+
     const newConversation: NewConversation = {
       id: conversationId,
-      userId: "system", // TODO: Get from authentication context
+      userId: "system", // Authentication removed - using system user
       title: conversationTitle,
     };
 
     try {
       const [created] = await db.insert(conversations).values(newConversation).returning();
-      
+
       return {
         id: created.id,
         userId: created.userId,
@@ -214,20 +278,23 @@ export const createConversation = api(
 // Get a specific conversation with messages
 export const getConversation = api(
   { method: "GET", path: "/chat/conversations/:conversationId", expose: true },
-  async ({ conversationId, userId }: z.infer<typeof GetConversationRequest>): Promise<z.infer<typeof ConversationWithMessagesResponse>> => {
+  async ({
+    conversationId,
+    userId,
+  }: GetConversationRequest): Promise<ConversationWithMessagesResponse> => {
     try {
       const cacheKey: ConversationCacheKey = { conversationId };
       const cachedConversation = await CacheService.getCachedConversation(cacheKey);
 
       if (cachedConversation) {
-        // TODO: This placeholder doesn't include messages. 
-        // Need to decide if messages are part of the cached ConversationObject 
+        // TODO: This placeholder doesn't include messages.
+        // Need to decide if messages are part of the cached ConversationObject
         // or if they are fetched separately. For now, assume messages are not in this specific cache object.
         // If they were, we'd need to map them here.
         // Also, update conversation access timestamp in DB if returning from cache?
         // For simplicity, this example returns the cached object as is, assuming it matches the response structure.
         // A more complete implementation would fetch messages if not in cache or if a shallow cache is used.
-        
+
         // This is a simplified return, as PlaceholderConversationObject may not match ConversationWithMessagesResponse exactly
         // In a real scenario, you'd fetch messages separately or ensure the cached object includes them.
         // For now, we'll reconstruct a partial response and assume messages need fetching or are not part of this primary cache item.
@@ -245,10 +312,7 @@ export const getConversation = api(
       const conversation = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
       if (conversation.length === 0) {
@@ -269,7 +333,8 @@ export const getConversation = api(
         title: conversation[0].title,
         createdAt: conversation[0].createdAt,
         updatedAt: new Date(), // Use current time as it's just been accessed/updated
-        messages: messages.map((msg: any) => ({ // Or decide if messages are part of this cache item
+        messages: messages.map((msg: any) => ({
+          // Or decide if messages are part of this cache item
           id: msg.id,
           role: msg.role,
           content: msg.content,
@@ -308,14 +373,19 @@ export const getConversation = api(
 // List conversations for a user
 export const listConversations = api(
   { method: "GET", path: "/chat/conversations", expose: true },
-  async ({ userId, page, pageSize, search }: z.infer<typeof ListConversationsRequest>): Promise<z.infer<typeof ListConversationsResponse>> => {
+  async ({
+    userId,
+    page,
+    pageSize,
+    search,
+  }: ListConversationsRequest): Promise<ListConversationsResponse> => {
     try {
       const offset = (page - 1) * pageSize;
-      
+
       // Build where conditions
       const baseCondition = eq(conversations.userId, userId);
-      const whereCondition = search 
-        ? and(baseCondition, sql`${conversations.title} ILIKE ${'%' + search + '%'}`)
+      const whereCondition = search
+        ? and(baseCondition, sql`${conversations.title} ILIKE ${`%${search}%`}`)
         : baseCondition;
 
       // Get total count
@@ -375,19 +445,22 @@ export const listConversations = api(
 // Add a message to a conversation
 export const addMessage = api(
   { method: "POST", path: "/chat/conversations/:conversationId/messages", expose: true },
-  async ({ conversationId, userId, role, content, citations }: z.infer<typeof AddMessageRequest>): Promise<z.infer<typeof MessageResponse>> => {
+  async ({
+    conversationId,
+    userId,
+    role,
+    content,
+    citations,
+  }: AddMessageRequest): Promise<MessageResponse> => {
     try {
       // Verify conversation exists and user has access
-      const conversation = await db
+      const conversationRecord = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
-      if (conversation.length === 0) {
+      if (conversationRecord.length === 0) {
         throw new Error("Conversation not found or access denied");
       }
 
@@ -402,11 +475,16 @@ export const addMessage = api(
 
       const [created] = await db.insert(conversationMessages).values(newMessage).returning();
 
-      // Update conversation timestamp
+      // Update conversation timestamp & clear draft
       await db
         .update(conversations)
-        .set({ updatedAt: new Date() })
+        .set({
+          updatedAt: new Date(),
+          isDraft: false, // Mark as not draft
+          metadata: sql`jsonb_set(COALESCE(metadata, '{}'::jsonb), '{draft}', 'null'::jsonb)`, // Clear draft
+        })
         .where(eq(conversations.id, conversationId));
+      log.info("Cleared draft and updated conversation timestamp", { conversationId });
 
       // Invalidate cache for this conversation
       const cacheKey: ConversationCacheKey = { conversationId };
@@ -426,21 +504,71 @@ export const addMessage = api(
   }
 );
 
+// Save conversation draft
+export const saveConversationDraft = api(
+  { method: "POST", path: "/chat/conversations/:conversationId/draft", expose: true },
+  async ({
+    conversationId,
+    userId,
+    draftPayload,
+  }: SaveConversationDraftRequest): Promise<{ message: string }> => {
+    try {
+      // Verify conversation exists and user has access
+      const conversation = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, conversationId),
+            eq(conversations.userId, userId) // Ensure user owns the conversation
+          )
+        )
+        .limit(1);
+
+      if (conversation.length === 0) {
+        // Consider if a draft should create a conversation if one doesn't exist, or fail.
+        // For now, assume conversation must exist to save a draft to it.
+        log.warn("Attempted to save draft for non-existent or unauthorized conversation", {
+          conversationId,
+          userId,
+        });
+        throw new Error("Conversation not found or access denied");
+      }
+
+      await db
+        .update(conversations)
+        .set({
+          metadata: sql`jsonb_set(COALESCE(metadata, '{}'::jsonb), '{draft}', ${JSON.stringify(draftPayload)}::jsonb)`,
+          isDraft: true, // Mark that it has a draft
+          updatedAt: new Date(), // Update timestamp to reflect draft activity
+        })
+        .where(eq(conversations.id, conversationId));
+
+      log.info("Conversation draft saved", { conversationId, userId });
+      return { message: "Draft saved successfully." };
+    } catch (error) {
+      log.error("Failed to save conversation draft", { conversationId, userId, error });
+      throw new Error(`Failed to save draft: ${error}`);
+    }
+  }
+);
+
 // Update conversation title
 export const updateConversationTitle = api(
   { method: "PUT", path: "/chat/conversations/:conversationId/title", expose: true },
-  async ({ conversationId, userId, title }: z.infer<typeof UpdateConversationTitleRequest>): Promise<z.infer<typeof ConversationResponse>> => {
+  async ({
+    conversationId,
+    userId,
+    title,
+  }: UpdateConversationTitleRequest): Promise<ConversationResponse> => {
     try {
       const [updated] = await db
         .update(conversations)
-        .set({ 
-          title, 
-          updatedAt: new Date() 
+        .set({
+          title,
+          updatedAt: new Date(),
         })
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .returning();
 
       if (!updated) {
@@ -463,16 +591,13 @@ export const updateConversationTitle = api(
 // Delete a conversation
 export const deleteConversation = api(
   { method: "DELETE", path: "/chat/conversations/:conversationId", expose: true },
-  async ({ conversationId, userId }: z.infer<typeof GetConversationRequest>): Promise<{ success: boolean }> => {
+  async ({ conversationId, userId }: GetConversationRequest): Promise<{ success: boolean }> => {
     try {
       // Verify ownership before deletion
       const conversation = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
       if (conversation.length === 0) {
@@ -485,9 +610,7 @@ export const deleteConversation = api(
         .where(eq(conversationMessages.conversationId, conversationId));
 
       // Delete conversation
-      await db
-        .delete(conversations)
-        .where(eq(conversations.id, conversationId));
+      await db.delete(conversations).where(eq(conversations.id, conversationId));
 
       // Invalidate cache for this conversation
       const cacheKey: ConversationCacheKey = { conversationId };
@@ -503,16 +626,16 @@ export const deleteConversation = api(
 // Get conversation history (messages only)
 export const getConversationHistory = api(
   { method: "GET", path: "/chat/conversations/:conversationId/messages", expose: true },
-  async ({ conversationId, userId }: z.infer<typeof GetConversationRequest>): Promise<{ messages: z.infer<typeof MessageResponse>[] }> => {
+  async ({
+    conversationId,
+    userId,
+  }: GetConversationRequest): Promise<{ messages: MessageResponse[] }> => {
     try {
       // Verify user has access to conversation
       const conversation = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
       if (conversation.length === 0) {
@@ -544,16 +667,17 @@ export const getConversationHistory = api(
 // Get pruned conversation history with context management
 export const getPrunedHistory = api(
   { method: "POST", path: "/chat/conversations/:conversationId/pruned-history", expose: true },
-  async ({ conversationId, userId, contextOptions }: z.infer<typeof GetPrunedHistoryRequest>): Promise<z.infer<typeof PrunedHistoryResponse>> => {
+  async ({
+    conversationId,
+    userId,
+    contextOptions,
+  }: GetPrunedHistoryRequest): Promise<PrunedHistoryResponse> => {
     try {
       // Verify user has access to conversation
       const conversation = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
       if (conversation.length === 0) {
@@ -569,11 +693,15 @@ export const getPrunedHistory = api(
 
       // Apply context management
       const prunedMessages = pruneConversationHistory(allMessages, contextOptions || {});
-      const totalTokens = prunedMessages.reduce((sum, msg) => sum + Math.ceil(msg.content.length / 4), 0);
-      
-      const contextSummary = prunedMessages.length === allMessages.length 
-        ? `Full conversation history included (${prunedMessages.length} messages, ~${totalTokens} tokens)`
-        : `Context pruned: ${prunedMessages.length} of ${allMessages.length} messages included (~${totalTokens} tokens)`;
+      const totalTokens = prunedMessages.reduce(
+        (sum, msg) => sum + Math.ceil(msg.content.length / 4),
+        0
+      );
+
+      const contextSummary =
+        prunedMessages.length === allMessages.length
+          ? `Full conversation history included (${prunedMessages.length} messages, ~${totalTokens} tokens)`
+          : `Context pruned: ${prunedMessages.length} of ${allMessages.length} messages included (~${totalTokens} tokens)`;
 
       return {
         messages: prunedMessages.map((msg: any) => ({
@@ -598,16 +726,16 @@ export const getPrunedHistory = api(
 // Analyze conversation patterns and topics
 export const analyzeConversation = api(
   { method: "GET", path: "/chat/conversations/:conversationId/analysis", expose: true },
-  async ({ conversationId, userId }: z.infer<typeof AnalyzeConversationRequest>): Promise<z.infer<typeof ConversationAnalysisResponse>> => {
+  async ({
+    conversationId,
+    userId,
+  }: AnalyzeConversationRequest): Promise<ConversationAnalysisResponse> => {
     try {
       // Verify user has access to conversation
       const conversation = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
       if (conversation.length === 0) {
@@ -634,7 +762,7 @@ export const analyzeConversation = api(
 
       // Analyze patterns
       const patterns = analyzeConversationPatterns(messages);
-      
+
       // Calculate statistics
       const totalCharacters = messages.reduce((sum, msg) => sum + msg.content.length, 0);
       const averageMessageLength = totalCharacters / messages.length;
@@ -656,18 +784,18 @@ export const analyzeConversation = api(
 // Manage RAG context for a conversation with document context
 export const manageConversationRAGContext = api(
   { method: "POST", path: "/chat/conversations/:conversationId/rag-context", expose: true },
-  async ({ 
-    conversationId, 
-    userId, 
+  async ({
+    conversationId,
+    userId,
     documentContext,
-    contextOptions 
+    contextOptions,
   }: {
     conversationId: string;
     userId: string;
     documentContext: string;
     contextOptions?: Partial<ContextOptionsType>;
   }): Promise<{
-    prunedMessages: z.infer<typeof MessageResponse>[];
+    prunedMessages: MessageResponse[];
     contextSummary: string;
     totalTokens: number;
     availableTokensForResponse: number;
@@ -677,10 +805,7 @@ export const manageConversationRAGContext = api(
       const conversation = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        ))
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1);
 
       if (conversation.length === 0) {
@@ -716,20 +841,4 @@ export const manageConversationRAGContext = api(
   }
 );
 
-// Health check endpoint
-export const health = api(
-  { method: "GET", path: "/chat/health", expose: true },
-  async (): Promise<{ status: string; timestamp: string }> => {
-    try {
-      // Test database connection
-      await db.select().from(conversations).limit(1);
-      
-      return {
-        status: "healthy",
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw new Error(`Chat service unhealthy: ${error}`);
-    }
-  }
-);
+// Health check is handled by the main chat service

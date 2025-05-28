@@ -10,5 +10,6 @@ export default defineConfig({
     // e.g., environment, setup files that are NOT needed for integration tests
     environment: 'node',
     globals: true, // Expose test APIs globally
+    setupFiles: ['./src/shared/testing/setup.ts'], // Added DeepEval setup
   },
 }); 

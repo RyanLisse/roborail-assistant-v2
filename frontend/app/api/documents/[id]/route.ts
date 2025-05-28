@@ -1,13 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.ENCORE_BACKEND_URL || 'http://localhost:4000';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const documentId = params.id;
+    const resolvedParams = await params;
+    const documentId = resolvedParams.id;
     const body = await request.json();
     const { userId } = body;
 
@@ -45,10 +46,11 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const documentId = params.id;
+    const resolvedParams = await params;
+    const documentId = resolvedParams.id;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

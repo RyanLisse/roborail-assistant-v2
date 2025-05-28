@@ -1,16 +1,19 @@
-import Redis from 'ioredis';
-import type { 
-  CacheConfig, 
-  CacheMetrics, 
-  CacheHealth,
-  CacheError,
+import Redis from "ioredis";
+import type {
+  CacheConfig,
   CacheConnectionError,
-  CacheSerializationError
-} from './types';
+  CacheError,
+  CacheHealth,
+  CacheMetrics,
+  CacheSerializationError,
+} from "./types";
 
 // In-memory cache implementation using Map with LRU eviction
 class LRUCache<T = any> {
-  private cache = new Map<string, { value: T; timestamp: number; lastAccessed: number; ttl: number }>();
+  private cache = new Map<
+    string,
+    { value: T; timestamp: number; lastAccessed: number; ttl: number }
+  >();
   private readonly maxSize: number;
   private readonly defaultTtl: number;
   private hits = 0;
@@ -23,7 +26,7 @@ class LRUCache<T = any> {
 
   get(key: string): T | null {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       this.misses++;
       return null;
@@ -45,7 +48,7 @@ class LRUCache<T = any> {
   set(key: string, value: T, customTTL?: number): void {
     const now = Date.now();
     const ttl = customTTL !== undefined ? customTTL : this.defaultTtl / 1000; // Convert default to seconds
-    
+
     // If at capacity, remove least recently used item
     if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       this.evictLRU();
@@ -121,10 +124,10 @@ export class CacheManager {
   constructor(config: CacheConfig) {
     this.config = config;
     this.l1Cache = new LRUCache(config.l1Cache.maxSize, config.l1Cache.ttl);
-    
+
     // Initialize Redis connection
     this.initializeRedis();
-    
+
     // Set up periodic cleanup
     this.cleanupInterval = setInterval(() => {
       this.l1Cache.cleanup();
@@ -145,16 +148,15 @@ export class CacheManager {
         maxRetriesPerRequest: 3,
       });
 
-      this.l2Cache.on('error', (error) => {
-        console.error('Redis connection error:', error);
+      this.l2Cache.on("error", (error) => {
+        console.error("Redis connection error:", error);
       });
 
-      this.l2Cache.on('connect', () => {
-        console.log('Redis connected successfully');
+      this.l2Cache.on("connect", () => {
+        console.log("Redis connected successfully");
       });
-
     } catch (error) {
-      console.error('Failed to initialize Redis:', error);
+      console.error("Failed to initialize Redis:", error);
       // Continue without Redis - degrade gracefully
       this.l2Cache = null;
     }
@@ -169,7 +171,7 @@ export class CacheManager {
       }
 
       // Try L2 cache (Redis) if L1 miss
-      if (this.l2Cache && this.l2Cache.status === 'ready') {
+      if (this.l2Cache && this.l2Cache.status === "ready") {
         try {
           const l2Result = await this.l2Cache.get(this.formatKey(key));
           if (l2Result) {
@@ -182,14 +184,14 @@ export class CacheManager {
             this.l2Misses++;
           }
         } catch (redisError) {
-          console.warn('Redis get error, falling back:', redisError);
+          console.warn("Redis get error, falling back:", redisError);
           this.l2Misses++;
         }
       }
 
       return null;
     } catch (error) {
-      console.error('Cache get error:', error);
+      console.error("Cache get error:", error);
       return null;
     }
   }
@@ -198,25 +200,25 @@ export class CacheManager {
     try {
       // Test serialization first to catch circular references
       const serialized = JSON.stringify(value);
-      
+
       // Set in L1 cache
       this.l1Cache.set(key, value, ttl);
 
       // Set in L2 cache (Redis) if available
-      if (this.l2Cache && this.l2Cache.status === 'ready') {
+      if (this.l2Cache && this.l2Cache.status === "ready") {
         try {
           const cacheTTL = ttl || this.config.l2Cache.ttl / 1000; // Convert to seconds
-          await this.l2Cache.set(this.formatKey(key), serialized, 'EX', cacheTTL);
+          await this.l2Cache.set(this.formatKey(key), serialized, "EX", cacheTTL);
         } catch (redisError) {
-          console.warn('Redis set error:', redisError);
+          console.warn("Redis set error:", redisError);
           // Continue - L1 cache is still available
         }
       }
     } catch (error) {
-      if (error instanceof TypeError && error.message.includes('circular')) {
-        throw new Error('Cannot cache circular references');
+      if (error instanceof TypeError && error.message.includes("circular")) {
+        throw new Error("Cannot cache circular references");
       }
-      console.error('Cache set error:', error);
+      console.error("Cache set error:", error);
       throw error;
     }
   }
@@ -227,15 +229,15 @@ export class CacheManager {
       this.l1Cache.delete(key);
 
       // Delete from L2 cache (Redis) if available
-      if (this.l2Cache && this.l2Cache.status === 'ready') {
+      if (this.l2Cache && this.l2Cache.status === "ready") {
         try {
           await this.l2Cache.del(this.formatKey(key));
         } catch (redisError) {
-          console.warn('Redis delete error:', redisError);
+          console.warn("Redis delete error:", redisError);
         }
       }
     } catch (error) {
-      console.error('Cache delete error:', error);
+      console.error("Cache delete error:", error);
     }
   }
 
@@ -247,14 +249,14 @@ export class CacheManager {
       // Clear L2 cache is not implemented to avoid accidental data loss
       // Individual key deletion should be used instead
     } catch (error) {
-      console.error('Cache clear error:', error);
+      console.error("Cache clear error:", error);
     }
   }
 
   async getMetrics(): Promise<CacheMetrics> {
     const l1Metrics = this.l1Cache.getMetrics();
     const l2Total = this.l2Hits + this.l2Misses;
-    
+
     return {
       l1Cache: l1Metrics,
       l2Cache: {
@@ -268,8 +270,8 @@ export class CacheManager {
 
   async healthCheck(): Promise<CacheHealth> {
     const l1Metrics = this.l1Cache.getMetrics();
-    
-    let l2Status: 'healthy' | 'degraded' | 'down' = 'down';
+
+    let l2Status: "healthy" | "degraded" | "down" = "down";
     let l2Connected = false;
     let l2ResponseTime: number | undefined;
 
@@ -278,17 +280,17 @@ export class CacheManager {
       try {
         await this.l2Cache.ping();
         l2ResponseTime = Date.now() - startTime;
-        l2Status = l2ResponseTime < 100 ? 'healthy' : 'degraded';
+        l2Status = l2ResponseTime < 100 ? "healthy" : "degraded";
         l2Connected = true;
       } catch (error) {
-        l2Status = 'down';
+        l2Status = "down";
         l2Connected = false;
       }
     }
 
     return {
       l1Cache: {
-        status: 'healthy',
+        status: "healthy",
         size: l1Metrics.size,
         memoryUsage: this.estimateL1MemoryUsage(),
       },
@@ -312,7 +314,7 @@ export class CacheManager {
         this.l2Cache = null;
       }
     } catch (error) {
-      console.error('Cache disconnect error:', error);
+      console.error("Cache disconnect error:", error);
     }
   }
 
@@ -322,13 +324,13 @@ export class CacheManager {
 
   private async getRedisSize(): Promise<number> {
     try {
-      if (this.l2Cache && this.l2Cache.status === 'ready') {
-        const info = await this.l2Cache.info('keyspace');
+      if (this.l2Cache && this.l2Cache.status === "ready") {
+        const info = await this.l2Cache.info("keyspace");
         const dbMatch = info.match(/db\d+:keys=(\d+)/);
-        return dbMatch ? parseInt(dbMatch[1], 10) : 0;
+        return dbMatch ? Number.parseInt(dbMatch[1], 10) : 0;
       }
     } catch (error) {
-      console.warn('Failed to get Redis size:', error);
+      console.warn("Failed to get Redis size:", error);
     }
     return 0;
   }

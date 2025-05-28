@@ -1,28 +1,31 @@
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "./connection";
-import { 
-  documents, 
-  documentChunks, 
-  conversations, 
-  conversationMessages,
-  type Document,
-  type DocumentChunk,
+import {
   type Conversation,
   type ConversationMessage,
-  createDocumentSchema,
-  createDocumentChunkSchema,
+  type Document,
+  type DocumentChunk,
+  conversationMessages,
+  conversations,
   createConversationSchema,
-  createMessageSchema
+  createDocumentChunkSchema,
+  createDocumentSchema,
+  createMessageSchema,
+  documentChunks,
+  documents,
 } from "./schema";
 
 // Document operations
 export const documentUtils = {
   async create(data: Parameters<typeof createDocumentSchema.parse>[0]) {
     const validated = createDocumentSchema.parse(data);
-    const [document] = await db.insert(documents).values({
-      ...validated,
-      uploadedAt: new Date(),
-    }).returning();
+    const [document] = await db
+      .insert(documents)
+      .values({
+        ...validated,
+        uploadedAt: new Date(),
+      })
+      .returning();
     return document;
   },
 
@@ -44,7 +47,7 @@ export const documentUtils = {
   async updateStatus(id: string, status: Document["status"], processedAt?: Date) {
     const updateData: any = { status };
     if (processedAt) updateData.processedAt = processedAt;
-    
+
     const [updated] = await db
       .update(documents)
       .set(updateData)
@@ -62,10 +65,13 @@ export const documentUtils = {
 export const chunkUtils = {
   async create(data: Parameters<typeof createDocumentChunkSchema.parse>[0]) {
     const validated = createDocumentChunkSchema.parse(data);
-    const [chunk] = await db.insert(documentChunks).values({
-      ...validated,
-      createdAt: new Date(),
-    }).returning();
+    const [chunk] = await db
+      .insert(documentChunks)
+      .values({
+        ...validated,
+        createdAt: new Date(),
+      })
+      .returning();
     return chunk;
   },
 
@@ -106,11 +112,14 @@ export const chunkUtils = {
 export const conversationUtils = {
   async create(data: Parameters<typeof createConversationSchema.parse>[0]) {
     const validated = createConversationSchema.parse(data);
-    const [conversation] = await db.insert(conversations).values({
-      ...validated,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
+    const [conversation] = await db
+      .insert(conversations)
+      .values({
+        ...validated,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
     return conversation;
   },
 
@@ -147,17 +156,20 @@ export const conversationUtils = {
 export const messageUtils = {
   async create(data: Parameters<typeof createMessageSchema.parse>[0]) {
     const validated = createMessageSchema.parse(data);
-    const [message] = await db.insert(conversationMessages).values({
-      ...validated,
-      createdAt: new Date(),
-    }).returning();
-    
+    const [message] = await db
+      .insert(conversationMessages)
+      .values({
+        ...validated,
+        createdAt: new Date(),
+      })
+      .returning();
+
     // Update conversation timestamp
     await db
       .update(conversations)
       .set({ updatedAt: new Date() })
       .where(eq(conversations.id, validated.conversationId));
-    
+
     return message;
   },
 
@@ -172,7 +184,9 @@ export const messageUtils = {
   },
 
   async deleteByConversationId(conversationId: string) {
-    await db.delete(conversationMessages).where(eq(conversationMessages.conversationId, conversationId));
+    await db
+      .delete(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId));
   },
 };
 
@@ -183,7 +197,11 @@ export const healthUtils = {
       await db.execute(sql`SELECT 1`);
       return { status: "healthy", timestamp: new Date() };
     } catch (error) {
-      return { status: "unhealthy", error: error instanceof Error ? error.message : "Unknown error", timestamp: new Date() };
+      return {
+        status: "unhealthy",
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date(),
+      };
     }
   },
 
@@ -191,7 +209,9 @@ export const healthUtils = {
     const [documentsCount] = await db.execute(sql`SELECT COUNT(*) as count FROM documents`);
     const [chunksCount] = await db.execute(sql`SELECT COUNT(*) as count FROM document_chunks`);
     const [conversationsCount] = await db.execute(sql`SELECT COUNT(*) as count FROM conversations`);
-    const [messagesCount] = await db.execute(sql`SELECT COUNT(*) as count FROM conversation_messages`);
+    const [messagesCount] = await db.execute(
+      sql`SELECT COUNT(*) as count FROM conversation_messages`
+    );
 
     return {
       documents: Number(documentsCount.count),

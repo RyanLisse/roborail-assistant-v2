@@ -1,8 +1,8 @@
-import { MultiLevelEmbeddingCache } from "../lib/infrastructure/cache/embedding-cache";
-import { MetricHelpers, recordError } from "../lib/monitoring/metrics";
-import { loggers } from "../lib/monitoring/logger";
 import { config } from "../../shared/config/environment";
 import { MetricsRecorder } from "../../shared/infrastructure/monitoring/metrics";
+import { MultiLevelEmbeddingCache } from "../lib/infrastructure/cache/embedding-cache";
+import { loggers } from "../lib/monitoring/logger";
+import { MetricHelpers, recordError } from "../lib/monitoring/metrics";
 
 // Use centralized configuration for Cohere API key
 const cohereApiKey = config.ai.cohereApiKey;
@@ -24,7 +24,7 @@ export interface ChunkingResponse {
   chunks: DocumentChunk[];
   totalChunks: number;
   processingTime: number;
-  status: 'success' | 'error';
+  status: "success" | "error";
 }
 
 export interface DocumentChunk {
@@ -58,7 +58,7 @@ export interface DocumentMetadata {
 }
 
 export interface ParsedElement {
-  type: 'title' | 'text' | 'table' | 'list' | 'header' | 'footer';
+  type: "title" | "text" | "table" | "list" | "header" | "footer";
   content: string;
   page?: number;
   confidence?: number;
@@ -74,7 +74,7 @@ export interface BoundingBox {
 
 export interface EmbeddingRequest {
   texts: string[];
-  inputType?: 'search_document' | 'search_query' | 'classification' | 'clustering';
+  inputType?: "search_document" | "search_query" | "classification" | "clustering";
 }
 
 export interface EmbeddingResponse {
@@ -86,13 +86,13 @@ export interface EmbeddingResponse {
 }
 
 export interface ChunkingError {
-  type: 'CHUNKING_FAILED' | 'EMBEDDING_FAILED' | 'API_ERROR' | 'INVALID_INPUT';
+  type: "CHUNKING_FAILED" | "EMBEDDING_FAILED" | "API_ERROR" | "INVALID_INPUT";
   message: string;
   documentId?: string;
 }
 
 // Cohere API configuration
-const COHERE_API_BASE = 'https://api.cohere.ai';
+const COHERE_API_BASE = "https://api.cohere.ai";
 const EMBED_ENDPOINT = `${COHERE_API_BASE}/v1/embed`;
 
 // Chunking configuration
@@ -104,49 +104,50 @@ const MAX_EMBEDDING_BATCH_SIZE = 96; // Cohere's limit
 // Main processing function
 export async function processDocumentChunking(request: ChunkingRequest): Promise<ChunkingResponse> {
   const startTime = Date.now();
-  
+
   try {
     // Validate input
     validateChunkingRequest(request);
 
     // Create semantic chunks from the extracted text
     const chunks = await createSemanticChunks(request);
-    
+
     // Generate embeddings for all chunks
-    const texts = chunks.map(chunk => chunk.content);
+    const texts = chunks.map((chunk) => chunk.content);
     const embeddingResponse = await generateEmbeddings({
       texts,
-      inputType: 'search_document',
+      inputType: "search_document",
     });
 
     // Assign embeddings to chunks
-    chunks.forEach((chunk, index) => {
+    for (const [index, chunk] of chunks.entries()) {
       chunk.embedding = embeddingResponse.embeddings[index];
-    });
+    }
 
     const processingTime = Date.now() - startTime;
 
-    console.log(`Processed ${chunks.length} chunks for document ${request.documentId} in ${processingTime}ms`);
+    console.log(
+      `Processed ${chunks.length} chunks for document ${request.documentId} in ${processingTime}ms`
+    );
 
     return {
       documentId: request.documentId,
       chunks,
       totalChunks: chunks.length,
       processingTime,
-      status: 'success',
+      status: "success",
     };
-
   } catch (error) {
-    console.error('Document chunking error:', error);
-    
+    console.error("Document chunking error:", error);
+
     // If already a ChunkingError, re-throw as is
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
-    
+
     const chunkingError: ChunkingError = {
-      type: 'CHUNKING_FAILED',
-      message: error instanceof Error ? error.message : 'Unknown chunking error',
+      type: "CHUNKING_FAILED",
+      message: error instanceof Error ? error.message : "Unknown chunking error",
       documentId: request.documentId,
     };
     throw chunkingError;
@@ -157,16 +158,16 @@ export async function processDocumentChunking(request: ChunkingRequest): Promise
 function validateChunkingRequest(request: ChunkingRequest): void {
   if (!request.documentId || request.documentId.trim().length === 0) {
     const error: ChunkingError = {
-      type: 'INVALID_INPUT',
-      message: 'Document ID is required',
+      type: "INVALID_INPUT",
+      message: "Document ID is required",
     };
     throw error;
   }
 
   if (!request.extractedText || request.extractedText.trim().length === 0) {
     const error: ChunkingError = {
-      type: 'INVALID_INPUT',
-      message: 'Extracted text is required and cannot be empty',
+      type: "INVALID_INPUT",
+      message: "Extracted text is required and cannot be empty",
       documentId: request.documentId,
     };
     throw error;
@@ -174,8 +175,8 @@ function validateChunkingRequest(request: ChunkingRequest): void {
 
   if (!request.elements || !Array.isArray(request.elements)) {
     const error: ChunkingError = {
-      type: 'INVALID_INPUT',
-      message: 'Elements array is required',
+      type: "INVALID_INPUT",
+      message: "Elements array is required",
       documentId: request.documentId,
     };
     throw error;
@@ -185,40 +186,39 @@ function validateChunkingRequest(request: ChunkingRequest): void {
 // Create semantic chunks from extracted text and elements
 async function createSemanticChunks(request: ChunkingRequest): Promise<DocumentChunk[]> {
   const chunks: DocumentChunk[] = [];
-  
+
   try {
     // Strategy 1: Use element-based chunking for structured content
     if (hasStructuredElements(request.elements)) {
       return await createElementBasedChunks(request);
     }
-    
+
     // Strategy 2: Use sentence-based semantic chunking for plain text
     return await createSentenceBasedChunks(request);
-    
   } catch (error) {
-    console.error('Error creating semantic chunks:', error);
+    console.error("Error creating semantic chunks:", error);
     throw error;
   }
 }
 
 // Check if document has structured elements
 function hasStructuredElements(elements: ParsedElement[]): boolean {
-  const structuredTypes = ['title', 'header', 'table', 'list'];
-  return elements.some(el => structuredTypes.includes(el.type));
+  const structuredTypes = ["title", "header", "table", "list"];
+  return elements.some((el) => structuredTypes.includes(el.type));
 }
 
 // Create chunks based on document elements
 async function createElementBasedChunks(request: ChunkingRequest): Promise<DocumentChunk[]> {
   const chunks: DocumentChunk[] = [];
   let chunkIndex = 0;
-  
+
   // Group elements by semantic proximity
   const elementGroups = groupElementsBySemantics(request.elements);
-  
+
   for (const group of elementGroups) {
-    const content = group.map(el => el.content).join('\n\n');
+    const content = group.map((el) => el.content).join("\n\n");
     const tokenCount = estimateTokenCount(content);
-    
+
     // If group is too large, split it further
     if (tokenCount > DEFAULT_MAX_CHUNK_SIZE) {
       const subChunks = await splitLargeContent(content, group, request.documentId, chunkIndex);
@@ -236,7 +236,7 @@ async function createElementBasedChunks(request: ChunkingRequest): Promise<Docum
       chunkIndex++;
     }
   }
-  
+
   return chunks;
 }
 
@@ -244,15 +244,15 @@ async function createElementBasedChunks(request: ChunkingRequest): Promise<Docum
 function groupElementsBySemantics(elements: ParsedElement[]): ParsedElement[][] {
   const groups: ParsedElement[][] = [];
   let currentGroup: ParsedElement[] = [];
-  
+
   for (const element of elements) {
     // Start new group for titles and headers
-    if ((element.type === 'title' || element.type === 'header') && currentGroup.length > 0) {
+    if ((element.type === "title" || element.type === "header") && currentGroup.length > 0) {
       groups.push([...currentGroup]);
       currentGroup = [element];
     }
     // Tables and lists get their own groups
-    else if (element.type === 'table' || element.type === 'list') {
+    else if (element.type === "table" || element.type === "list") {
       if (currentGroup.length > 0) {
         groups.push([...currentGroup]);
         currentGroup = [];
@@ -264,29 +264,29 @@ function groupElementsBySemantics(elements: ParsedElement[]): ParsedElement[][] 
       currentGroup.push(element);
     }
   }
-  
+
   // Add remaining group
   if (currentGroup.length > 0) {
     groups.push(currentGroup);
   }
-  
-  return groups.filter(group => group.length > 0);
+
+  return groups.filter((group) => group.length > 0);
 }
 
 // Create sentence-based chunks for plain text
 async function createSentenceBasedChunks(request: ChunkingRequest): Promise<DocumentChunk[]> {
   const chunks: DocumentChunk[] = [];
-  
+
   // Split text into sentences
   const sentences = splitIntoSentences(request.extractedText);
-  
-  let currentChunk = '';
+
+  let currentChunk = "";
   let chunkIndex = 0;
-  
+
   for (const sentence of sentences) {
-    const potentialChunk = currentChunk + (currentChunk ? ' ' : '') + sentence;
+    const potentialChunk = currentChunk + (currentChunk ? " " : "") + sentence;
     const tokenCount = estimateTokenCount(potentialChunk);
-    
+
     // If adding this sentence would exceed optimal chunk size
     if (tokenCount > OPTIMAL_CHUNK_SIZE && currentChunk.length > 0) {
       // Create chunk from current content
@@ -298,33 +298,33 @@ async function createSentenceBasedChunks(request: ChunkingRequest): Promise<Docu
       currentChunk = potentialChunk;
     }
   }
-  
+
   // Add remaining content as final chunk
   if (currentChunk.trim().length > 0) {
     const chunk = createChunk(request.documentId, currentChunk, chunkIndex, request.elements);
     chunks.push(chunk);
   }
-  
+
   return chunks;
 }
 
 // Split large content into smaller chunks
 async function splitLargeContent(
-  content: string, 
-  elements: ParsedElement[], 
-  documentId: string, 
+  content: string,
+  elements: ParsedElement[],
+  documentId: string,
   startIndex: number
 ): Promise<DocumentChunk[]> {
   const chunks: DocumentChunk[] = [];
   const sentences = splitIntoSentences(content);
-  
-  let currentChunk = '';
+
+  let currentChunk = "";
   let chunkIndex = startIndex;
-  
+
   for (const sentence of sentences) {
-    const potentialChunk = currentChunk + (currentChunk ? ' ' : '') + sentence;
+    const potentialChunk = currentChunk + (currentChunk ? " " : "") + sentence;
     const tokenCount = estimateTokenCount(potentialChunk);
-    
+
     if (tokenCount > DEFAULT_MAX_CHUNK_SIZE && currentChunk.length > 0) {
       const chunk = createChunk(documentId, currentChunk, chunkIndex, elements);
       chunks.push(chunk);
@@ -334,12 +334,12 @@ async function splitLargeContent(
       currentChunk = potentialChunk;
     }
   }
-  
+
   if (currentChunk.trim().length > 0) {
     const chunk = createChunk(documentId, currentChunk, chunkIndex, elements);
     chunks.push(chunk);
   }
-  
+
   return chunks;
 }
 
@@ -348,30 +348,28 @@ function splitIntoSentences(text: string): string[] {
   // Split on sentence-ending punctuation, but preserve abbreviations
   const sentences = text
     .split(/(?<=[.!?])\s+(?=[A-Z])/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
-  
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
   return sentences;
 }
 
 // Create a document chunk
 function createChunk(
-  documentId: string, 
-  content: string, 
-  index: number, 
+  documentId: string,
+  content: string,
+  index: number,
   elements: ParsedElement[]
 ): DocumentChunk {
   const tokenCount = estimateTokenCount(content);
-  
+
   // Find relevant element types for this chunk
   const relevantElements = findRelevantElements(content, elements);
-  const elementTypes = [...new Set(relevantElements.map(el => el.type))];
-  
+  const elementTypes = [...new Set(relevantElements.map((el) => el.type))];
+
   // Get page number from most relevant element
-  const pageNumber = relevantElements.length > 0 
-    ? relevantElements[0].page || 1 
-    : 1;
-  
+  const pageNumber = relevantElements.length > 0 ? relevantElements[0].page || 1 : 1;
+
   return {
     id: `chunk_${documentId}_${index}`,
     documentId,
@@ -381,7 +379,7 @@ function createChunk(
     pageNumber,
     tokenCount,
     metadata: {
-      elementTypes: elementTypes.length > 0 ? elementTypes : ['text'],
+      elementTypes: elementTypes.length > 0 ? elementTypes : ["text"],
       semanticCategory: inferSemanticCategory(content, elementTypes),
       importance: calculateImportance(content, elementTypes),
       parentElement: relevantElements.length > 0 ? relevantElements[0].type : undefined,
@@ -393,97 +391,98 @@ function createChunk(
 // Find elements relevant to the given content
 function findRelevantElements(content: string, elements: ParsedElement[]): ParsedElement[] {
   const relevant: ParsedElement[] = [];
-  
+
   for (const element of elements) {
     // Check if element content appears in chunk content
     const elementWords = element.content.toLowerCase().split(/\s+/);
     const contentLower = content.toLowerCase();
-    
+
     // If most words from element appear in content, consider it relevant
-    const matchingWords = elementWords.filter(word => 
-      word.length > 2 && contentLower.includes(word)
+    const matchingWords = elementWords.filter(
+      (word) => word.length > 2 && contentLower.includes(word)
     );
-    
+
     if (matchingWords.length >= Math.min(3, elementWords.length * 0.5)) {
       relevant.push(element);
     }
   }
-  
+
   return relevant;
 }
 
 // Infer semantic category from content and element types
 function inferSemanticCategory(content: string, elementTypes: string[]): string {
   const contentLower = content.toLowerCase();
-  
-  if (elementTypes.includes('title')) return 'title';
-  if (elementTypes.includes('header')) return 'section_header';
-  if (elementTypes.includes('table')) return 'data_table';
-  if (elementTypes.includes('list')) return 'list_content';
-  
+
+  if (elementTypes.includes("title")) return "title";
+  if (elementTypes.includes("header")) return "section_header";
+  if (elementTypes.includes("table")) return "data_table";
+  if (elementTypes.includes("list")) return "list_content";
+
   // Content-based inference
-  if (contentLower.includes('introduction') || contentLower.includes('abstract')) return 'introduction';
-  if (contentLower.includes('conclusion') || contentLower.includes('summary')) return 'conclusion';
-  if (contentLower.includes('method') || contentLower.includes('approach')) return 'methodology';
-  if (contentLower.includes('result') || contentLower.includes('finding')) return 'results';
-  if (contentLower.includes('reference') || contentLower.includes('citation')) return 'references';
-  
-  return 'content';
+  if (contentLower.includes("introduction") || contentLower.includes("abstract"))
+    return "introduction";
+  if (contentLower.includes("conclusion") || contentLower.includes("summary")) return "conclusion";
+  if (contentLower.includes("method") || contentLower.includes("approach")) return "methodology";
+  if (contentLower.includes("result") || contentLower.includes("finding")) return "results";
+  if (contentLower.includes("reference") || contentLower.includes("citation")) return "references";
+
+  return "content";
 }
 
 // Calculate importance score for content
 function calculateImportance(content: string, elementTypes: string[]): number {
   let importance = 0.5; // base importance
-  
+
   // Type-based importance
-  if (elementTypes.includes('title')) importance += 0.4;
-  if (elementTypes.includes('header')) importance += 0.3;
-  if (elementTypes.includes('table')) importance += 0.2;
-  if (elementTypes.includes('list')) importance += 0.1;
-  
+  if (elementTypes.includes("title")) importance += 0.4;
+  if (elementTypes.includes("header")) importance += 0.3;
+  if (elementTypes.includes("table")) importance += 0.2;
+  if (elementTypes.includes("list")) importance += 0.1;
+
   // Content-based importance
   const contentLower = content.toLowerCase();
-  if (contentLower.includes('important') || contentLower.includes('key')) importance += 0.1;
-  if (contentLower.includes('conclusion') || contentLower.includes('summary')) importance += 0.2;
-  if (contentLower.includes('introduction') || contentLower.includes('abstract')) importance += 0.2;
-  
+  if (contentLower.includes("important") || contentLower.includes("key")) importance += 0.1;
+  if (contentLower.includes("conclusion") || contentLower.includes("summary")) importance += 0.2;
+  if (contentLower.includes("introduction") || contentLower.includes("abstract")) importance += 0.2;
+
   // Length-based importance (longer content might be more important)
   const words = content.split(/\s+/).length;
   if (words > 100) importance += 0.1;
   if (words > 200) importance += 0.1;
-  
+
   return Math.min(1.0, importance);
 }
 
 // Generate embeddings using Cohere API with caching
 export async function generateEmbeddings(request: EmbeddingRequest): Promise<EmbeddingResponse> {
   const startTime = Date.now();
-  const inputType = request.inputType || 'search_document';
+  const inputType = request.inputType || "search_document";
   const batchSize = request.texts.length;
 
   // Start performance timer
-  const timer = logger.startTimer('embedding-generation');
+  const timer = logger.startTimer("embedding-generation");
 
-  logger.info('Starting embedding generation', {
+  logger.info("Starting embedding generation", {
     inputType,
     batchSize,
-    model: 'embed-english-v4.0'
+    model: "embed-english-v4.0",
   });
 
   try {
     // Track request metrics
-    MetricHelpers.trackEmbeddingRequest('embed-english-v4.0', inputType, batchSize);
+    MetricHelpers.trackEmbeddingRequest("embed-english-v4.0", inputType, batchSize);
 
     // Validate input
     if (!request.texts || request.texts.length === 0) {
-      logger.error('Invalid embedding request: empty texts array', {
+      logger.error("Invalid embedding request: empty texts array", {
         inputType,
-        batchSize: 0
+        batchSize: 0,
       });
-      recordError('upload', 'INVALID_INPUT', 'Texts array cannot be empty');
+      recordError("upload", "INVALID_INPUT", "Texts array cannot be empty");
       const error: ChunkingError = {
-        type: 'INVALID_INPUT',
-        message: 'Texts array cannot be empty',
+        type: "INVALID_INPUT",
+        message: "Texts array cannot be empty",
       };
       throw error;
     }
@@ -503,7 +502,11 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
           textIndexMap.push(i);
         }
       } catch (cacheError) {
-        console.warn('Cache error during retrieval for text:', request.texts[i].substring(0, 50), cacheError);
+        console.warn(
+          "Cache error during retrieval for text:",
+          request.texts[i].substring(0, 50),
+          cacheError
+        );
         uncachedTexts.push(request.texts[i]);
         textIndexMap.push(i);
       }
@@ -511,31 +514,31 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
 
     // If all embeddings were cached, return early
     if (uncachedTexts.length === 0) {
-      logger.info('Full cache hit for embedding request', {
+      logger.info("Full cache hit for embedding request", {
         totalTexts: request.texts.length,
         cacheHitRate: 1.0,
-        inputType
+        inputType,
       });
       const totalTokens = request.texts.reduce((sum, text) => sum + estimateTokenCount(text), 0);
-      timer.end({ 
-        cacheHitRate: 1.0, 
-        totalTokens, 
-        apiCallsMade: 0 
+      timer.end({
+        cacheHitRate: 1.0,
+        totalTokens,
+        apiCallsMade: 0,
       });
       return {
         embeddings: cachedEmbeddings,
-        model: 'embed-english-v4.0',
+        model: "embed-english-v4.0",
         usage: { totalTokens },
       };
     }
 
     const cacheHitRate = (request.texts.length - uncachedTexts.length) / request.texts.length;
-    logger.info('Partial cache hit for embedding request', {
+    logger.info("Partial cache hit for embedding request", {
       totalTexts: request.texts.length,
       cachedTexts: request.texts.length - uncachedTexts.length,
       uncachedTexts: uncachedTexts.length,
       cacheHitRate,
-      inputType
+      inputType,
     });
 
     // Process uncached texts in batches
@@ -544,8 +547,11 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
 
     for (let i = 0; i < uncachedTexts.length; i += MAX_EMBEDDING_BATCH_SIZE) {
       const batch = uncachedTexts.slice(i, i + MAX_EMBEDDING_BATCH_SIZE);
-      const batchResponse = await generateEmbeddingBatch(batch, request.inputType || 'search_document');
-      
+      const batchResponse = await generateEmbeddingBatch(
+        batch,
+        request.inputType || "search_document"
+      );
+
       newEmbeddings.push(...batchResponse.embeddings);
       totalTokens += batchResponse.usage.totalTokens;
     }
@@ -555,16 +561,18 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
       try {
         await embeddingCache.set(text, newEmbeddings[index]);
       } catch (cacheError) {
-        console.warn('Cache error during storage for text:', text.substring(0, 50), cacheError);
+        console.warn("Cache error during storage for text:", text.substring(0, 50), cacheError);
       }
     });
-    
+
     // Don't wait for caching to complete, but log when done
-    Promise.all(cachePromises).then(() => {
-      console.log(`Cached ${uncachedTexts.length} new embeddings`);
-    }).catch(error => {
-      console.warn('Some embeddings failed to cache:', error);
-    });
+    Promise.all(cachePromises)
+      .then(() => {
+        console.log(`Cached ${uncachedTexts.length} new embeddings`);
+      })
+      .catch((error) => {
+        console.warn("Some embeddings failed to cache:", error);
+      });
 
     // Combine cached and new embeddings in correct order
     const finalEmbeddings: number[][] = [...cachedEmbeddings];
@@ -579,7 +587,7 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
 
     const result: EmbeddingResponse = {
       embeddings: finalEmbeddings,
-      model: 'embed-english-v4.0',
+      model: "embed-english-v4.0",
       usage: {
         totalTokens: totalTokens + cachedTokens,
       },
@@ -587,78 +595,88 @@ export async function generateEmbeddings(request: EmbeddingRequest): Promise<Emb
 
     // Track success metrics
     const duration = Date.now() - startTime;
-    MetricHelpers.trackEmbeddingDuration(duration, 'embed-english-v4.0', batchSize);
-    
-    // Record metrics using new MetricsRecorder
-    MetricsRecorder.recordEmbeddingGeneration(duration, batchSize, 'embed-english-v4.0');
+    MetricHelpers.trackEmbeddingDuration(duration, "embed-english-v4.0", batchSize);
 
-    logger.info('Embedding generation completed successfully', {
+    // Record metrics using new MetricsRecorder
+    MetricsRecorder.recordEmbeddingGeneration(duration, batchSize, "embed-english-v4.0");
+
+    logger.info("Embedding generation completed successfully", {
       totalTexts: request.texts.length,
       finalEmbeddings: result.embeddings.length,
       totalTokens: result.usage.totalTokens,
       duration,
-      model: result.model
+      model: result.model,
     });
 
-    timer.end({ 
+    timer.end({
       success: true,
       totalTokens: result.usage.totalTokens,
-      finalEmbeddings: result.embeddings.length
+      finalEmbeddings: result.embeddings.length,
     });
 
     return result;
-
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+
     // Log detailed error information
-    logger.error('Embedding generation failed', {
-      inputType,
-      batchSize,
-      duration,
-      textsLength: request.texts.map(t => t.length)
-    }, error instanceof Error ? error : undefined);
-    
+    logger.error(
+      "Embedding generation failed",
+      {
+        inputType,
+        batchSize,
+        duration,
+        textsLength: request.texts.map((t) => t.length),
+      },
+      error instanceof Error ? error : undefined
+    );
+
     // Record error metrics
-    if (error && typeof error === 'object' && 'type' in error) {
-      recordError('upload', (error as ChunkingError).type, (error as ChunkingError).message);
+    if (error && typeof error === "object" && "type" in error) {
+      recordError("upload", (error as ChunkingError).type, (error as ChunkingError).message);
     } else {
-      recordError('upload', 'EMBEDDING_FAILED', error instanceof Error ? error.message : 'Unknown error');
+      recordError(
+        "upload",
+        "EMBEDDING_FAILED",
+        error instanceof Error ? error.message : "Unknown error"
+      );
     }
 
-    timer.end({ 
+    timer.end({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : "Unknown error",
     });
-    
+
     // If already a ChunkingError, re-throw as is
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
-    
+
     const embeddingError: ChunkingError = {
-      type: 'EMBEDDING_FAILED',
-      message: error instanceof Error ? error.message : 'Unknown embedding error',
+      type: "EMBEDDING_FAILED",
+      message: error instanceof Error ? error.message : "Unknown embedding error",
     };
     throw embeddingError;
   }
 }
 
 // Generate embeddings for a single batch
-async function generateEmbeddingBatch(texts: string[], inputType: string): Promise<EmbeddingResponse> {
+async function generateEmbeddingBatch(
+  texts: string[],
+  inputType: string
+): Promise<EmbeddingResponse> {
   try {
     const requestBody = {
-      model: 'embed-english-v4.0',
+      model: "embed-english-v4.0",
       texts: texts,
       input_type: inputType,
-      embedding_types: ['float'],
+      embedding_types: ["float"],
     };
 
     const response = await fetch(EMBED_ENDPOINT, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${cohereApiKey()}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cohereApiKey()}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
     });
@@ -666,19 +684,19 @@ async function generateEmbeddingBatch(texts: string[], inputType: string): Promi
     if (!response.ok) {
       const errorText = await response.text();
       const error: ChunkingError = {
-        type: 'API_ERROR',
+        type: "API_ERROR",
         message: `Cohere API error: ${response.status} ${response.statusText} - ${errorText}`,
       };
       throw error;
     }
 
     const data = await response.json();
-    
+
     // Validate response structure
     if (!data.embeddings || !Array.isArray(data.embeddings)) {
       const error: ChunkingError = {
-        type: 'API_ERROR',
-        message: 'Invalid response format from Cohere API',
+        type: "API_ERROR",
+        message: "Invalid response format from Cohere API",
       };
       throw error;
     }
@@ -688,23 +706,22 @@ async function generateEmbeddingBatch(texts: string[], inputType: string): Promi
 
     return {
       embeddings: data.embeddings,
-      model: data.response_type || 'embed-english-v4.0',
+      model: data.response_type || "embed-english-v4.0",
       usage: {
         totalTokens,
       },
     };
-
   } catch (error) {
-    console.error('Cohere API error:', error);
-    
+    console.error("Cohere API error:", error);
+
     // If already a ChunkingError, re-throw
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
 
     const apiError: ChunkingError = {
-      type: 'API_ERROR',
-      message: error instanceof Error ? error.message : 'Failed to call Cohere API',
+      type: "API_ERROR",
+      message: error instanceof Error ? error.message : "Failed to call Cohere API",
     };
     throw apiError;
   }
@@ -715,19 +732,19 @@ export function estimateTokenCount(text: string): number {
   if (!text || text.trim().length === 0) {
     return 0;
   }
-  
+
   // More accurate estimation considering:
   // - Average English word is ~4.5 characters
   // - Tokens are often sub-word units
   // - Punctuation and spaces affect tokenization
-  
+
   const words = text.trim().split(/\s+/).length;
   const characters = text.length;
-  
+
   // Use a heuristic that accounts for both word count and character count
   const wordBasedEstimate = words * 1.3; // ~1.3 tokens per word on average
   const charBasedEstimate = characters / 3.5; // ~3.5 characters per token on average
-  
+
   // Take the average of both estimates
   return Math.ceil((wordBasedEstimate + charBasedEstimate) / 2);
 }
@@ -735,10 +752,7 @@ export function estimateTokenCount(text: string): number {
 // Helper function to clean and prepare text for embedding
 export function prepareTextForEmbedding(text: string): string {
   // Remove excessive whitespace and normalize
-  return text
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 8000); // Cohere has input length limits
+  return text.replace(/\s+/g, " ").trim().substring(0, 8000); // Cohere has input length limits
 }
 
 // Utility function to calculate semantic similarity between chunks
@@ -746,7 +760,7 @@ export function calculateChunkSimilarity(chunk1: DocumentChunk, chunk2: Document
   if (!chunk1.embedding || !chunk2.embedding) {
     return 0;
   }
-  
+
   // Calculate cosine similarity
   return cosineSimilarity(chunk1.embedding, chunk2.embedding);
 }
@@ -756,17 +770,17 @@ function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     return 0;
   }
-  
+
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
-  
+
   for (let i = 0; i < a.length; i++) {
     dotProduct += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-  
+
   const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
   return magnitude === 0 ? 0 : dotProduct / magnitude;
 }

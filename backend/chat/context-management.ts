@@ -1,5 +1,4 @@
-import { ConversationMessage } from "../db/schema";
-import { z } from "zod";
+import type { ConversationMessage } from "../db/schema";
 
 // Configuration constants for context management
 export const CONTEXT_LIMITS = {
@@ -15,24 +14,37 @@ export const CONTEXT_LIMITS = {
   MAX_MESSAGE_CHARS: 4000,
 } as const;
 
-// Schema for context management options
-export const ContextOptions = z.object({
-  maxMessages: z.number().int().positive().default(CONTEXT_LIMITS.MAX_MESSAGES),
-  maxContextChars: z.number().int().positive().default(CONTEXT_LIMITS.MAX_CONTEXT_CHARS),
-  maxContextTokens: z.number().int().positive().default(CONTEXT_LIMITS.MAX_CONTEXT_TOKENS),
-  minRecentMessages: z.number().int().positive().default(CONTEXT_LIMITS.MIN_RECENT_MESSAGES),
-  prioritizeRecent: z.boolean().default(true),
-  includeSystemMessages: z.boolean().default(true),
-});
+// Define explicit interfaces for ContextOptionsType, etc.
+// Replace all usages of z.infer<typeof ...> in API signatures with these interfaces.
+// If runtime validation is needed, use zod inside the function body, not in the signature.
 
-export type ContextOptionsType = z.infer<typeof ContextOptions>;
+// Schema for context management options
+export const ContextOptions = {
+  maxMessages: CONTEXT_LIMITS.MAX_MESSAGES,
+  maxContextChars: CONTEXT_LIMITS.MAX_CONTEXT_CHARS,
+  maxContextTokens: CONTEXT_LIMITS.MAX_CONTEXT_TOKENS,
+  minRecentMessages: CONTEXT_LIMITS.MIN_RECENT_MESSAGES,
+  prioritizeRecent: true,
+  includeSystemMessages: true,
+};
+
+export type ContextOptionsType = typeof ContextOptions;
+
+// Define DbCitation interface matching DB schema
+export interface DbCitation {
+  documentId: string;
+  filename: string;
+  pageNumber?: number;
+  chunkContent: string;
+  relevanceScore: number;
+}
 
 // Message with metadata for context management
 export interface MessageWithMetadata {
   id: string;
   role: "user" | "assistant";
   content: string;
-  citations?: any[];
+  citations?: DbCitation[];
   createdAt: Date;
   charCount: number;
   estimatedTokens: number;
@@ -57,33 +69,33 @@ export function calculateMessagePriority(
   index: number
 ): number {
   let priority = 0;
-  
+
   // Recent messages get higher priority (exponential growth)
   const recency = index + 1; // Index 0 gets recency 1, higher indices get higher recency
-  priority += Math.pow(recency, 2); // Stronger exponential preference for recent messages
-  
+  priority += recency ** 2; // Stronger exponential preference for recent messages
+
   // User messages get slightly higher priority than assistant messages
   if (message.role === "user") {
     priority += 10;
   } else if (message.role === "assistant") {
     priority += 8;
   }
-  
+
   // Messages with citations get higher priority (contain valuable context)
   if (message.citations && message.citations.length > 0) {
     priority += 5 * message.citations.length;
   }
-  
+
   // Shorter messages are easier to include (slight preference)
   if (message.charCount < 500) {
     priority += 2;
   }
-  
+
   // Question messages (ending with ?) get higher priority
-  if (message.content.trim().endsWith('?')) {
+  if (message.content.trim().endsWith("?")) {
     priority += 3;
   }
-  
+
   return priority;
 }
 
@@ -93,7 +105,7 @@ export function calculateMessagePriority(
 export function prepareMessagesWithMetadata(
   messages: ConversationMessage[]
 ): MessageWithMetadata[] {
-  const messagesWithMetadata: MessageWithMetadata[] = messages.map((msg, index) => ({
+  const messagesWithMetadata: MessageWithMetadata[] = messages.map((msg) => ({
     id: msg.id,
     role: msg.role as "user" | "assistant",
     content: msg.content,
@@ -105,9 +117,9 @@ export function prepareMessagesWithMetadata(
   }));
 
   // Calculate priorities for all messages
-  messagesWithMetadata.forEach((msg, index) => {
+  for (const [index, msg] of messagesWithMetadata.entries()) {
     msg.priority = calculateMessagePriority(msg, messagesWithMetadata, index);
-  });
+  }
 
   return messagesWithMetadata;
 }
@@ -119,20 +131,21 @@ export function truncateMessage(content: string, maxChars: number): string {
   if (content.length <= maxChars) {
     return content;
   }
-  
+
   // Try to truncate at sentence boundaries
   const sentences = content.split(/[.!?]+/);
   let truncated = "";
-  
+
   for (const sentence of sentences) {
     const withSentence = truncated + sentence + ".";
-    if (withSentence.length <= maxChars - 10) { // Leave room for "..."
+    if (withSentence.length <= maxChars - 10) {
+      // Leave room for "..."
       truncated = withSentence;
     } else {
       break;
     }
   }
-  
+
   // If no sentences fit, truncate at word boundary
   if (truncated.length === 0) {
     const words = content.split(/\s+/);
@@ -145,12 +158,12 @@ export function truncateMessage(content: string, maxChars: number): string {
       }
     }
   }
-  
+
   // Last resort: hard truncate
   if (truncated.length === 0) {
     truncated = content.substring(0, maxChars - 3);
   }
-  
+
   return truncated.trim() + (truncated.length < content.length ? "..." : "");
 }
 
@@ -161,48 +174,53 @@ export function pruneConversationHistory(
   messages: ConversationMessage[],
   options: Partial<ContextOptionsType> = {}
 ): ConversationMessage[] {
-  const opts = ContextOptions.parse(options);
-  
+  const opts = { ...ContextOptions, ...options };
+
   if (messages.length === 0) {
     return [];
   }
 
   // Prepare messages with metadata
   const messagesWithMetadata = prepareMessagesWithMetadata(messages);
-  
+
   // Always include the most recent messages (up to minRecentMessages)
   const recentMessages = messagesWithMetadata.slice(-opts.minRecentMessages);
-  let selectedMessages = [...recentMessages];
+  const selectedMessages = [...recentMessages];
   let totalChars = recentMessages.reduce((sum, msg) => sum + msg.charCount, 0);
   let totalTokens = recentMessages.reduce((sum, msg) => sum + msg.estimatedTokens, 0);
 
   // If we haven't reached the limits, try to include more messages
-  if (selectedMessages.length < opts.maxMessages && 
-      totalChars < opts.maxContextChars && 
-      totalTokens < opts.maxContextTokens) {
-    
+  if (
+    selectedMessages.length < opts.maxMessages &&
+    totalChars < opts.maxContextChars &&
+    totalTokens < opts.maxContextTokens
+  ) {
     // Get remaining messages (excluding already selected recent ones)
     const remainingMessages = messagesWithMetadata
       .slice(0, -opts.minRecentMessages)
       .sort((a, b) => b.priority - a.priority); // Sort by priority descending
 
     for (const message of remainingMessages) {
-      const wouldExceedLimits = 
+      const wouldExceedLimits =
         selectedMessages.length + 1 > opts.maxMessages ||
         totalChars + message.charCount > opts.maxContextChars ||
         totalTokens + message.estimatedTokens > opts.maxContextTokens;
-      
+
       if (wouldExceedLimits) {
         // Try truncating the message if it's too long
         if (message.charCount > CONTEXT_LIMITS.MAX_MESSAGE_CHARS) {
-          const truncatedContent = truncateMessage(message.content, CONTEXT_LIMITS.MAX_MESSAGE_CHARS);
+          const truncatedContent = truncateMessage(
+            message.content,
+            CONTEXT_LIMITS.MAX_MESSAGE_CHARS
+          );
           const truncatedChars = truncatedContent.length;
           const truncatedTokens = estimateTokenCount(truncatedContent);
-          
-          if (totalChars + truncatedChars <= opts.maxContextChars &&
-              totalTokens + truncatedTokens <= opts.maxContextTokens &&
-              selectedMessages.length + 1 <= opts.maxMessages) {
-            
+
+          if (
+            totalChars + truncatedChars <= opts.maxContextChars &&
+            totalTokens + truncatedTokens <= opts.maxContextTokens &&
+            selectedMessages.length + 1 <= opts.maxMessages
+          ) {
             selectedMessages.push({
               ...message,
               content: truncatedContent,
@@ -215,7 +233,7 @@ export function pruneConversationHistory(
         }
         continue;
       }
-      
+
       selectedMessages.push(message);
       totalChars += message.charCount;
       totalTokens += message.estimatedTokens;
@@ -223,12 +241,12 @@ export function pruneConversationHistory(
   }
 
   // Sort selected messages by creation time to maintain conversation order
-  const sortedMessages = selectedMessages.sort((a, b) => 
-    a.createdAt.getTime() - b.createdAt.getTime()
+  const sortedMessages = selectedMessages.sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
   );
 
   // Convert back to ConversationMessage format
-  return sortedMessages.map(msg => ({
+  return sortedMessages.map((msg) => ({
     id: msg.id,
     conversationId: messages[0]?.conversationId || "",
     role: msg.role,
@@ -250,7 +268,7 @@ export function createContextSummary(
   if (originalCount === prunedCount) {
     return `Full conversation history included (${prunedCount} messages, ~${totalTokens} tokens)`;
   }
-  
+
   const omittedCount = originalCount - prunedCount;
   return `Conversation summary: ${prunedCount} of ${originalCount} messages included (${omittedCount} messages omitted for context length). Total: ~${totalTokens} tokens, ${totalChars} characters.`;
 }
@@ -269,32 +287,34 @@ export function manageRAGContext(
   totalTokens: number;
   availableTokensForResponse: number;
 } {
-  const opts = ContextOptions.parse(options);
-  
+  const opts = { ...ContextOptions, ...options };
+
   // Reserve tokens for document context and response
   const documentTokens = estimateTokenCount(documentContext);
   const reservedTokensForResponse = 1000; // Reserve tokens for the LLM response
-  const availableTokensForHistory = opts.maxContextTokens - documentTokens - reservedTokensForResponse;
-  
+  const availableTokensForHistory =
+    opts.maxContextTokens - documentTokens - reservedTokensForResponse;
+
   // Adjust context options based on available space
   const adjustedOptions = {
     ...opts,
     maxContextTokens: Math.max(availableTokensForHistory, opts.maxContextTokens * 0.3), // At least 30% for history
   };
-  
+
   const prunedMessages = pruneConversationHistory(conversationMessages, adjustedOptions);
-  
-  const totalChars = prunedMessages.reduce((sum, msg) => sum.length + msg.content.length, 0);
-  const totalTokens = estimateTokenCount(prunedMessages.map(msg => msg.content).join(" ")) + documentTokens;
+
+  const totalChars = prunedMessages.reduce((sum, msg) => sum + msg.content.length, 0);
+  const totalTokens =
+    estimateTokenCount(prunedMessages.map((msg) => msg.content).join(" ")) + documentTokens;
   const availableTokensForResponse = opts.maxContextTokens - totalTokens;
-  
+
   const contextSummary = createContextSummary(
     conversationMessages.length,
     prunedMessages.length,
     totalChars,
     totalTokens
   );
-  
+
   return {
     prunedMessages,
     contextSummary,
@@ -311,45 +331,54 @@ export function analyzeConversationPatterns(messages: ConversationMessage[]): {
   keyEntities: string[];
   conversationTrends: string[];
 } {
-  const allContent = messages.map(msg => msg.content).join(" ");
+  const allContent = messages.map((msg) => msg.content).join(" ");
   const allContentLower = allContent.toLowerCase();
-  
+
   // Extract potential topics (simple keyword frequency analysis)
   const words = allContentLower.match(/\b\w{4,}\b/g) || [];
-  const wordFreq = words.reduce((freq, word) => {
-    freq[word] = (freq[word] || 0) + 1;
-    return freq;
-  }, {} as Record<string, number>);
-  
+  const wordFreq = words.reduce(
+    (freq, word) => {
+      freq[word] = (freq[word] || 0) + 1;
+      return freq;
+    },
+    {} as Record<string, number>
+  );
+
   const topicClusters = Object.entries(wordFreq)
     .filter(([_, count]) => count >= 2) // Lower threshold for tests
     .sort(([_, a], [__, b]) => b - a)
     .slice(0, 5)
     .map(([word]) => word);
-  
+
   // Simple entity extraction (capitalized words from original case content)
   const entities = allContent.match(/\b[A-Z][a-zA-Z]+\b/g) || [];
-  const entityFreq = entities.reduce((freq, entity) => {
-    freq[entity] = (freq[entity] || 0) + 1;
-    return freq;
-  }, {} as Record<string, number>);
-  
+  const entityFreq = entities.reduce(
+    (freq, entity) => {
+      freq[entity] = (freq[entity] || 0) + 1;
+      return freq;
+    },
+    {} as Record<string, number>
+  );
+
   const keyEntities = Object.entries(entityFreq)
     .filter(([_, count]) => count >= 1) // Lower threshold for tests
     .sort(([_, a], [__, b]) => b - a)
     .slice(0, 5)
     .map(([entity]) => entity);
-  
+
   // Analyze conversation trends
   const trends: string[] = [];
   if (messages.length > 10) trends.push("Extended conversation");
-  if (messages.some(msg => msg.citations && msg.citations.length > 0)) {
+  if (messages.some((msg) => msg.citations && msg.citations.length > 0)) {
     trends.push("Document-heavy discussion");
   }
-  if (messages.filter(msg => msg.role === "user").length > messages.filter(msg => msg.role === "assistant").length) {
+  if (
+    messages.filter((msg) => msg.role === "user").length >
+    messages.filter((msg) => msg.role === "assistant").length
+  ) {
     trends.push("Question-heavy session");
   }
-  
+
   return {
     topicClusters,
     keyEntities,

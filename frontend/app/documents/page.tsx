@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,7 +11,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { Trash2, Upload, Search, MoreHorizontal, FileText } from 'lucide-react';
+import { Trash2, Upload, Search, MoreHorizontal, FileText, Edit3, Eye } from 'lucide-react';
+import Link from 'next/link';
+import { cn } from "@/lib/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface Document {
   id: string;
@@ -33,6 +36,24 @@ interface DocumentListResponse {
   page: number;
   limit: number;
   hasMore: boolean;
+}
+
+interface DocumentItem {
+  id: number;
+  title: string;
+  sourceType: string | null;
+  status: string | null;
+  createdAt: string;
+  updatedAt: string;
+  chunkCount?: number;
+  metadata?: Record<string, any>;
+}
+
+interface ListApiResponse {
+  items: DocumentItem[];
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
 }
 
 export default function DocumentsPage() {
@@ -111,7 +132,7 @@ export default function DocumentsPage() {
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const formatDate = (dateString: string): string => {
@@ -271,7 +292,7 @@ export default function DocumentsPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Document</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete "{document.originalName}"? 
+                                Are you sure you want to delete &quot;{document.originalName}&quot;?
                                 This action cannot be undone and will remove all associated chunks and embeddings.
                               </AlertDialogDescription>
                             </AlertDialogHeader>

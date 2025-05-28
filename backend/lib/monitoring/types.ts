@@ -1,14 +1,14 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Validation schemas for monitoring data
-export const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error', 'fatal']);
+export const LogLevelSchema = z.enum(["debug", "info", "warn", "error", "fatal"]);
 export const ServiceNameSchema = z.enum([
-  'chat',
-  'upload',
-  'docprocessing', 
-  'search',
-  'docmgmt',
-  'llm'
+  "chat",
+  "upload",
+  "docprocessing",
+  "search",
+  "docmgmt",
+  "llm",
 ]);
 
 export const StructuredLogSchema = z.object({
@@ -21,43 +21,60 @@ export const StructuredLogSchema = z.object({
   userId: z.string().optional(),
   requestId: z.string().optional(),
   metadata: z.record(z.any()).optional(),
-  error: z.object({
-    name: z.string(),
-    message: z.string(),
-    stack: z.string().optional(),
-  }).optional(),
+  error: z
+    .object({
+      name: z.string(),
+      message: z.string(),
+      stack: z.string().optional(),
+    })
+    .optional(),
 });
 
-export const MetricTypeSchema = z.enum(['counter', 'gauge', 'histogram']);
+export const MetricTypeSchema = z.enum(["counter", "gauge", "histogram"]);
 
 export const MonitoringConfigSchema = z.object({
   metricsEnabled: z.boolean().default(true),
   loggingEnabled: z.boolean().default(true),
-  logLevel: LogLevelSchema.default('info'),
+  logLevel: LogLevelSchema.default("info"),
   metricsPort: z.number().int().min(1024).max(65535).default(9090),
   exportInterval: z.number().int().min(1000).default(30000), // 30 seconds
   healthCheckInterval: z.number().int().min(1000).default(30000),
   enableTracing: z.boolean().default(false),
 });
 
-// TypeScript types derived from schemas
-export type LogLevel = z.infer<typeof LogLevelSchema>;
-export type ServiceName = z.infer<typeof ServiceNameSchema>;
-export type StructuredLog = z.infer<typeof StructuredLogSchema>;
-export type MetricType = z.infer<typeof MetricTypeSchema>;
-export type MonitoringConfig = z.infer<typeof MonitoringConfigSchema>;
+// TypeScript types - explicit definitions instead of z.infer to avoid import issues
+export type LogLevel = "debug" | "info" | "warn" | "error" | "fatal";
+export type ServiceName = "chat" | "upload" | "docprocessing" | "search" | "docmgmt" | "llm";
+export type MetricType = "counter" | "gauge" | "histogram";
+
+export interface StructuredLog {
+  timestamp: string;
+  level: LogLevel;
+  service: ServiceName;
+  message: string;
+  traceId?: string;
+  spanId?: string;
+  userId?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface MonitoringConfig {
+  logLevel: LogLevel;
+  enableMetrics: boolean;
+  enableTracing: boolean;
+}
 
 // Additional monitoring types
 export interface ServiceHealth {
   service: ServiceName;
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy";
   lastCheck: Date;
   responseTime?: number;
   details?: Record<string, any>;
 }
 
 export interface SystemHealth {
-  overall: 'healthy' | 'degraded' | 'unhealthy';
+  overall: "healthy" | "degraded" | "unhealthy";
   services: ServiceHealth[];
   timestamp: Date;
   version: string;
@@ -68,9 +85,9 @@ export interface AlertRule {
   name: string;
   description: string;
   metric: string;
-  condition: 'greater_than' | 'less_than' | 'equals' | 'not_equals';
+  condition: "greater_than" | "less_than" | "equals" | "not_equals";
   threshold: number;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: "low" | "medium" | "high" | "critical";
   enabled: boolean;
 }
 
@@ -126,9 +143,9 @@ export interface DashboardConfig {
 export interface DashboardPanel {
   id: string;
   title: string;
-  type: 'metric' | 'log' | 'chart' | 'table';
+  type: "metric" | "log" | "chart" | "table";
   query: string;
-  size: 'small' | 'medium' | 'large';
+  size: "small" | "medium" | "large";
   position: { x: number; y: number };
 }
 

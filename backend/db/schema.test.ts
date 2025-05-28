@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { documents, documentChunks, conversations, conversationMessages } from "./schema";
-import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { conversationMessages, conversations, documentChunks, documents } from "./schema";
 
 // Test database connection
-const testDbUrl = process.env.TEST_DATABASE_URL || "postgresql://test:test@localhost:5432/test_rag_db";
+const testDbUrl =
+  process.env.TEST_DATABASE_URL || "postgresql://test:test@localhost:5432/test_rag_db";
 const client = postgres(testDbUrl);
 const testDb = drizzle(client);
 
@@ -202,7 +203,7 @@ describe("Database Schema", () => {
       // This test would verify that vector similarity search works
       // For now, we'll just test that the embedding column accepts vector data
       const queryEmbedding = Array.from({ length: 1024 }, () => Math.random() - 0.5);
-      
+
       // This would be a real vector similarity query in implementation
       const chunks = await testDb.select().from(documentChunks).limit(5);
       expect(Array.isArray(chunks)).toBe(true);

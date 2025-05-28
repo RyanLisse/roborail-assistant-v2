@@ -1,228 +1,191 @@
-'use client';
-
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+"use client";
+import { useState, type FormEvent, useRef } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Dropzone, type FileWithPreview } from '@/components/ui/dropzone';
-import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Terminal } from "lucide-react";
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
-interface UploadFormData {
-  file: File;
-  title: string;
-  sourceType: string;
-  metadata: string;
+// API call function
+async function uploadDocumentApi(formData: FormData): Promise<any> {
+  // Assuming backend runs on the same host or proxied. Adjust if necessary.
+  const response = await fetch(`/api/documents/upload`, { 
+    method: 'POST',
+    body: formData,
+    // Headers are set automatically for FormData by the browser
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: "Failed to upload document. Unknown error." }));
+    throw new Error(errorData.message || 'Failed to upload document');
+  }
+  return response.json();
 }
 
-interface UploadResponse {
-  id: string;
+interface UploadedDocInfo {
+  documentId: number; // Assuming backend returns number, adjust if string based on schema
   status: string;
-  message: string;
+  fileName: string;
 }
 
 export default function DocumentUploadPage() {
-  const [formData, setFormData] = useState({
-    title: '',
-    sourceType: '',
-    metadata: ''
-  });
-  const [selectedFiles, setSelectedFiles] = useState<FileWithPreview[]>([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+  const [sourceType, setSourceType] = useState(''); 
+  const [metadataJson, setMetadataJson] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0); // Basic progress state
+  const [uploadedDocs, setUploadedDocs] = useState<UploadedDocInfo[]>([]);
 
-  const uploadMutation = useMutation({
-    mutationFn: async (data: UploadFormData): Promise<UploadResponse> => {
-      const formData = new FormData();
-      formData.append('file', data.file);
-      formData.append('title', data.title);
-      formData.append('sourceType', data.sourceType);
-      formData.append('metadata', data.metadata);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            setUploadProgress(progress);
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const response = JSON.parse(xhr.responseText);
-              resolve(response);
-            } catch (error) {
-              reject(new Error('Failed to parse response'));
-            }
-          } else {
-            reject(new Error(`Upload failed with status: ${xhr.status}`));
-          }
-        };
-
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-
-        xhr.open('POST', '/api/files/upload');
-        xhr.send(formData);
-      });
-    },
+  const uploadMutation = useMutation<UploadedDocInfo, Error, FormData>({
+    mutationFn: uploadDocumentApi,
     onSuccess: (data) => {
-      toast.success('Document uploaded successfully!');
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setUploadedDocs(prev => [...prev, { documentId: data.documentId, status: data.status, fileName: data.fileName }]);
+      // Reset form
+      setFile(null);
+      setTitle('');
+      setSourceType('');
+      setMetadataJson('');
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setUploadProgress(0);
-      setSelectedFiles([]);
-      setFormData({ title: '', sourceType: '', metadata: '' });
-      router.push('/documents');
+      // Optionally, show a success toast
+      // toast({ title: "Upload Successful", description: `Document "${data.fileName}" uploaded and queued.` });
     },
-    onError: (error) => {
-      toast.error(`Upload failed: ${error.message}`);
+    onError: (error: Error) => {
       setUploadProgress(0);
+      // toast({ variant: "destructive", title: "Upload Failed", description: error.message });
+      alert(`Upload failed: ${error.message}`); // Simple alert for now
+    },
+    // For actual progress, one would typically use XMLHttpRequest or a library
+    // that supports upload progress events, then call setUploadProgress.
+    // Here, we simulate progress briefly for visual feedback during mutation.
+    onMutate: () => {
+        setUploadProgress(50); // Indicate loading state
     }
   });
 
-  const handleFilesChange = (files: FileWithPreview[]) => {
-    setSelectedFiles(files);
-    if (files.length > 0 && !formData.title) {
-      setFormData(prev => ({ ...prev, title: files[0].name.split('.')[0] }));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      if (!title) setTitle(selectedFile.name); 
+      if (!sourceType) setSourceType(selectedFile.type || 'application/octet-stream');
     }
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    
-    if (selectedFiles.length === 0) {
-      toast.error('Please select a file to upload');
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!file) {
+      alert("Please select a file to upload.");
       return;
     }
 
-    if (!formData.title || !formData.sourceType) {
-      toast.error('Please fill in all required fields');
-      return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', title || file.name);
+    formData.append('sourceType', sourceType || file.type || 'application/octet-stream');
+    if (metadataJson) {
+      try {
+        // Validate JSON structure slightly before sending
+        JSON.parse(metadataJson);
+        formData.append('metadataJson', metadataJson);
+      } catch (jsonError) {
+        alert("Invalid JSON in metadata field.");
+        return;
+      }
     }
-
-    // For now, upload only the first file. You can extend this to handle multiple files
-    uploadMutation.mutate({
-      file: selectedFiles[0],
-      title: formData.title,
-      sourceType: formData.sourceType,
-      metadata: formData.metadata
-    });
+    uploadMutation.mutate(formData);
   };
-
-  const isUploading = uploadMutation.isPending;
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="container mx-auto p-4 py-8 max-w-2xl">
+      <div className="mb-6">
+        <Button variant="outline" asChild><Link href="/documents">&larr; Back to Documents</Link></Button>
+      </div>
       <Card>
         <CardHeader>
-          <CardTitle>Upload Document</CardTitle>
+          <CardTitle>Upload New Document</CardTitle>
+          <CardDescription>Upload PDF, DOCX, TXT, or other supported document types for processing and inclusion in the RAG system.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <Label>Select File *</Label>
-              <div className="mt-2">
-                <Dropzone
-                  value={selectedFiles}
-                  onValueChange={handleFilesChange}
-                  disabled={isUploading}
-                  dropzoneOptions={{
-                    accept: {
-                      'application/pdf': ['.pdf'],
-                      'application/msword': ['.doc'],
-                      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-                      'text/plain': ['.txt'],
-                      'text/markdown': ['.md'],
-                    },
-                    maxSize: 10 * 1024 * 1024, // 10MB
-                    maxFiles: 1,
-                  }}
-                  className="w-full"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="file">Document File</Label>
+              <Input id="file" type="file" onChange={handleFileChange} ref={fileInputRef} required className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"/>
             </div>
-
-            <div>
-              <Label htmlFor="title">Document Title *</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="Enter document title"
-                disabled={isUploading}
-                className="mt-2"
-              />
+            <div className="space-y-2">
+              <Label htmlFor="title">Title (Optional - defaults to filename)</Label>
+              <Input id="title" type="text" placeholder="Document title" value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
-
-            <div>
-              <Label htmlFor="sourceType">Source Type *</Label>
-              <Select
-                value={formData.sourceType}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, sourceType: value }))}
-                disabled={isUploading}
-              >
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select source type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="report">Report</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="policy">Policy</SelectItem>
-                  <SelectItem value="presentation">Presentation</SelectItem>
-                  <SelectItem value="research">Research</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <Label htmlFor="sourceType">Content Type (Optional - e.g., application/pdf)</Label>
+              <Input id="sourceType" type="text" placeholder="e.g., application/pdf, text/plain" value={sourceType} onChange={(e) => setSourceType(e.target.value)} />
+              <p className="text-xs text-muted-foreground">If blank, will attempt to infer from file.</p>
             </div>
-
-            <div>
-              <Label htmlFor="metadata">Additional Metadata</Label>
+            <div className="space-y-2">
+              <Label htmlFor="metadataJson">Additional Metadata (Optional JSON String)</Label>
               <Textarea
-                id="metadata"
-                value={formData.metadata}
-                onChange={(e) => setFormData(prev => ({ ...prev, metadata: e.target.value }))}
-                placeholder="Enter any additional metadata or description"
-                disabled={isUploading}
-                className="mt-2"
-                rows={4}
+                id="metadataJson"
+                placeholder='e.g., { "author": "John Doe", "tags": ["important", "q3"], "department": "Legal" }'
+                value={metadataJson}
+                onChange={(e) => setMetadataJson(e.target.value)}
+                rows={3}
               />
+              <p className="text-xs text-muted-foreground">
+                Provide valid JSON. Example: {`{ "category": "policy", "version": "1.2" }`}
+              </p>
             </div>
-
-            {isUploading && (
+            
+            {(uploadMutation.isPending || (uploadProgress > 0 && uploadProgress < 100)) && (
               <div className="space-y-2">
-                <Label>Upload Progress</Label>
-                <Progress value={uploadProgress} className="w-full" />
-                <p className="text-sm text-muted-foreground">{uploadProgress}% complete</p>
+                <Label>Uploading...</Label>
+                <Progress value={uploadMutation.isPending && uploadProgress === 50 ? undefined : uploadProgress} className="w-full" />
+                {/* Indeterminate if no real progress, determinate if actual progress was implemented */}
               </div>
             )}
 
-            <div className="flex gap-4">
-              <Button
-                type="submit"
-                disabled={isUploading || selectedFiles.length === 0}
-                className="flex-1"
-              >
-                {isUploading ? 'Uploading...' : 'Upload Document'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push('/documents')}
-                disabled={isUploading}
-              >
-                Cancel
-              </Button>
-            </div>
+             {uploadMutation.isError && (
+                <Alert variant="destructive">
+                    <Terminal className="h-4 w-4" />
+                    <AlertTitle>Upload Failed</AlertTitle>
+                    <AlertDescription>
+                        {uploadMutation.error?.message || "An unknown error occurred."}
+                    </AlertDescription>
+                </Alert>
+            )}
+             {uploadMutation.isSuccess && uploadedDocs.length > 0 && (
+                 <Alert variant="success">
+                    <Terminal className="h-4 w-4" />
+                    <AlertTitle>Upload Successful</AlertTitle>
+                    <AlertDescription>
+                        Document &quot;{uploadedDocs[uploadedDocs.length -1].fileName}&quot; (ID: {uploadedDocs[uploadedDocs.length -1].documentId}) uploaded and queued for processing.
+                    </AlertDescription>
+                </Alert>
+             )}
+
+            <Button type="submit" className="w-full" disabled={uploadMutation.isPending || !file}>
+              {uploadMutation.isPending ? 'Uploading...' : 'Upload Document'}
+            </Button>
           </form>
         </CardContent>
+        {uploadedDocs.length > 0 && (
+            <CardFooter className="flex-col items-start space-y-2 border-t pt-6 mt-6">
+                <h3 className="text-lg font-semibold">Upload History (this session):</h3>
+                <ul className="list-disc list-inside w-full space-y-1">
+                    {uploadedDocs.slice().reverse().map(doc => (
+                        <li key={doc.documentId} className="text-sm">
+                           <span className="font-medium">{doc.fileName}</span> (ID: {doc.documentId}) - Status: <span className={cn("font-semibold", {"text-green-600": doc.status === 'queued' || doc.status === 'processing'})}>{doc.status}</span>
+                        </li>
+                    ))}
+                </ul>
+            </CardFooter>
+        )}
       </Card>
     </div>
   );

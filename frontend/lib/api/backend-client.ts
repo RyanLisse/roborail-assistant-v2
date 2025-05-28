@@ -143,8 +143,8 @@ export class BackendAPIClient {
 
   async listConversations(
     userId: string,
-    page: number = 1,
-    pageSize: number = 20,
+    page = 1,
+    pageSize = 20,
     search?: string
   ): Promise<{ conversations: ConversationResponse[]; pagination: any }> {
     const params = new URLSearchParams({

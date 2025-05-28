@@ -132,7 +132,7 @@ export function usePaginatedData<T>(
 // Common pattern: Real-time data updates
 export function useRealTimeUpdates(
   queryKey: any[],
-  shouldUpdate: boolean = true
+  shouldUpdate = true
 ) {
   const queryClient = useQueryClient()
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from "vitest";
 
 // Mock types for testing
 interface SearchFilter {
@@ -57,7 +57,8 @@ class MockExpandedSearchService {
   private mockDocuments: SearchResult[] = [
     {
       id: "chunk1",
-      content: "Machine learning algorithms are fundamental to AI development. They enable computers to learn patterns.",
+      content:
+        "Machine learning algorithms are fundamental to AI development. They enable computers to learn patterns.",
       documentId: "doc1",
       documentTitle: "Introduction to Machine Learning",
       chunkIndex: 0,
@@ -65,12 +66,13 @@ class MockExpandedSearchService {
       metadata: { category: "technical", difficulty: "beginner" },
       tags: ["ai", "machine-learning"],
       documentType: "tutorial",
-      createdAt: new Date('2024-01-15'),
-      documentMetadata: { author: "Dr. Smith", pages: 50 }
+      createdAt: new Date("2024-01-15"),
+      documentMetadata: { author: "Dr. Smith", pages: 50 },
     },
     {
       id: "chunk2",
-      content: "Deep learning is a subset of machine learning that uses neural networks with multiple layers.",
+      content:
+        "Deep learning is a subset of machine learning that uses neural networks with multiple layers.",
       documentId: "doc1",
       documentTitle: "Introduction to Machine Learning",
       chunkIndex: 1,
@@ -78,12 +80,13 @@ class MockExpandedSearchService {
       metadata: { category: "technical", difficulty: "intermediate" },
       tags: ["ai", "deep-learning", "neural-networks"],
       documentType: "tutorial",
-      createdAt: new Date('2024-01-15'),
-      documentMetadata: { author: "Dr. Smith", pages: 50 }
+      createdAt: new Date("2024-01-15"),
+      documentMetadata: { author: "Dr. Smith", pages: 50 },
     },
     {
       id: "chunk3",
-      content: "Data visualization helps in understanding complex datasets and presenting insights clearly.",
+      content:
+        "Data visualization helps in understanding complex datasets and presenting insights clearly.",
       documentId: "doc2",
       documentTitle: "Data Visualization Guide",
       chunkIndex: 0,
@@ -91,25 +94,27 @@ class MockExpandedSearchService {
       metadata: { category: "practical", difficulty: "beginner" },
       tags: ["visualization", "data-science"],
       documentType: "guide",
-      createdAt: new Date('2024-02-01'),
-      documentMetadata: { author: "Jane Doe", pages: 30 }
+      createdAt: new Date("2024-02-01"),
+      documentMetadata: { author: "Jane Doe", pages: 30 },
     },
     {
       id: "chunk4",
-      content: "Python libraries like matplotlib and seaborn are excellent for creating visualizations.",
+      content:
+        "Python libraries like matplotlib and seaborn are excellent for creating visualizations.",
       documentId: "doc2",
       documentTitle: "Data Visualization Guide",
       chunkIndex: 1,
-      score: 0.70,
+      score: 0.7,
       metadata: { category: "practical", difficulty: "intermediate" },
       tags: ["python", "visualization", "libraries"],
       documentType: "guide",
-      createdAt: new Date('2024-02-01'),
-      documentMetadata: { author: "Jane Doe", pages: 30 }
+      createdAt: new Date("2024-02-01"),
+      documentMetadata: { author: "Jane Doe", pages: 30 },
     },
     {
       id: "chunk5",
-      content: "Natural language processing enables computers to understand and generate human language.",
+      content:
+        "Natural language processing enables computers to understand and generate human language.",
       documentId: "doc3",
       documentTitle: "NLP Fundamentals",
       chunkIndex: 0,
@@ -117,18 +122,21 @@ class MockExpandedSearchService {
       metadata: { category: "technical", difficulty: "advanced" },
       tags: ["nlp", "ai", "language"],
       documentType: "research",
-      createdAt: new Date('2024-03-10'),
-      documentMetadata: { author: "Prof. Johnson", pages: 75 }
-    }
+      createdAt: new Date("2024-03-10"),
+      documentMetadata: { author: "Prof. Johnson", pages: 75 },
+    },
   ];
 
-  async searchWithFiltersAndExpansion(request: ExpandedSearchRequest): Promise<ExpandedSearchResponse> {
+  async searchWithFiltersAndExpansion(
+    request: ExpandedSearchRequest
+  ): Promise<ExpandedSearchResponse> {
     const startTime = Date.now();
-    
+
     // Apply basic search (simplified for testing)
-    let results = this.mockDocuments.filter(doc => 
-      doc.content.toLowerCase().includes(request.query.toLowerCase()) ||
-      doc.tags?.some(tag => tag.includes(request.query.toLowerCase()))
+    let results = this.mockDocuments.filter(
+      (doc) =>
+        doc.content.toLowerCase().includes(request.query.toLowerCase()) ||
+        doc.tags?.some((tag) => tag.includes(request.query.toLowerCase()))
     );
 
     // Apply filters
@@ -148,20 +156,22 @@ class MockExpandedSearchService {
     }
 
     const processingTime = Date.now() - startTime;
-    
+
     return {
       results,
       totalFound,
       processingTime,
       appliedFilters: request.filters,
-      expandedResults: request.contextExpansion ? results.reduce((sum, r) => sum + (r.relatedChunks?.length || 0), 0) : 0
+      expandedResults: request.contextExpansion
+        ? results.reduce((sum, r) => sum + (r.relatedChunks?.length || 0), 0)
+        : 0,
     };
   }
 
   private applyFilters(results: SearchResult[], filters: SearchFilter): SearchResult[] {
-    return results.filter(result => {
+    return results.filter((result) => {
       // Document type filter
-      if (filters.documentTypes && !filters.documentTypes.includes(result.documentType || '')) {
+      if (filters.documentTypes && !filters.documentTypes.includes(result.documentType || "")) {
         return false;
       }
 
@@ -177,9 +187,7 @@ class MockExpandedSearchService {
 
       // Tags filter
       if (filters.tags && filters.tags.length > 0) {
-        const hasMatchingTag = filters.tags.some(filterTag => 
-          result.tags?.includes(filterTag)
-        );
+        const hasMatchingTag = filters.tags.some((filterTag) => result.tags?.includes(filterTag));
         if (!hasMatchingTag) {
           return false;
         }
@@ -203,8 +211,11 @@ class MockExpandedSearchService {
     });
   }
 
-  private async expandContext(results: SearchResult[], options: ContextExpansionOptions): Promise<SearchResult[]> {
-    return results.map(result => {
+  private async expandContext(
+    results: SearchResult[],
+    options: ContextExpansionOptions
+  ): Promise<SearchResult[]> {
+    return results.map((result) => {
       const expanded = { ...result };
 
       // Add related chunks from the same document
@@ -225,7 +236,7 @@ class MockExpandedSearchService {
         expanded.metadata = {
           ...result.metadata,
           expandedContext: true,
-          relatedChunkCount: expanded.relatedChunks?.length || 0
+          relatedChunkCount: expanded.relatedChunks?.length || 0,
         };
       }
 
@@ -238,85 +249,89 @@ class MockExpandedSearchService {
     const maxChunks = options.maxRelatedChunks || 2;
 
     // Find chunks from the same document within the specified radius
-    const relatedChunks = this.mockDocuments.filter(chunk => 
-      chunk.documentId === result.documentId &&
-      chunk.id !== result.id &&
-      Math.abs(chunk.chunkIndex - result.chunkIndex) <= radius
+    const relatedChunks = this.mockDocuments.filter(
+      (chunk) =>
+        chunk.documentId === result.documentId &&
+        chunk.id !== result.id &&
+        Math.abs(chunk.chunkIndex - result.chunkIndex) <= radius
     );
 
     // Sort by proximity and limit
     return relatedChunks
-      .sort((a, b) => Math.abs(a.chunkIndex - result.chunkIndex) - Math.abs(b.chunkIndex - result.chunkIndex))
+      .sort(
+        (a, b) =>
+          Math.abs(a.chunkIndex - result.chunkIndex) - Math.abs(b.chunkIndex - result.chunkIndex)
+      )
       .slice(0, maxChunks);
   }
 }
 
-describe('Context Expansion and Filtering', () => {
+describe("Context Expansion and Filtering", () => {
   let mockService: MockExpandedSearchService;
 
   beforeEach(() => {
     mockService = new MockExpandedSearchService();
   });
 
-  describe('Advanced Filtering', () => {
-    it('should filter results by document type', async () => {
+  describe("Advanced Filtering", () => {
+    it("should filter results by document type", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning",
         userID: "user1",
         filters: {
-          documentTypes: ["tutorial"]
-        }
+          documentTypes: ["tutorial"],
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
 
       expect(response.results).toHaveLength(2);
-      expect(response.results.every(r => r.documentType === "tutorial")).toBe(true);
+      expect(response.results.every((r) => r.documentType === "tutorial")).toBe(true);
     });
 
-    it('should filter results by date range', async () => {
+    it("should filter results by date range", async () => {
       const request: ExpandedSearchRequest = {
         query: "data",
         userID: "user1",
         filters: {
           dateRange: {
-            start: new Date('2024-02-01'),
-            end: new Date('2024-02-28')
-          }
-        }
+            start: new Date("2024-02-01"),
+            end: new Date("2024-02-28"),
+          },
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
 
       expect(response.results).toHaveLength(1);
-      expect(response.results.every(r => r.documentId === "doc2")).toBe(true);
+      expect(response.results.every((r) => r.documentId === "doc2")).toBe(true);
     });
 
-    it('should filter results by tags', async () => {
+    it("should filter results by tags", async () => {
       const request: ExpandedSearchRequest = {
         query: "",
         userID: "user1",
         filters: {
-          tags: ["visualization"]
-        }
+          tags: ["visualization"],
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
 
       expect(response.results).toHaveLength(2);
-      expect(response.results.every(r => r.tags?.includes("visualization"))).toBe(true);
+      expect(response.results.every((r) => r.tags?.includes("visualization"))).toBe(true);
     });
 
-    it('should filter results by metadata attributes', async () => {
+    it("should filter results by metadata attributes", async () => {
       const request: ExpandedSearchRequest = {
         query: "",
         userID: "user1",
         filters: {
           metadata: {
             category: "technical",
-            difficulty: "beginner"
-          }
-        }
+            difficulty: "beginner",
+          },
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -326,22 +341,22 @@ describe('Context Expansion and Filtering', () => {
       expect(response.results[0].metadata?.difficulty).toBe("beginner");
     });
 
-    it('should filter results by minimum score', async () => {
+    it("should filter results by minimum score", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning",
         userID: "user1",
         filters: {
-          minScore: 0.90
-        }
+          minScore: 0.9,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
 
       expect(response.results).toHaveLength(1);
-      expect(response.results[0].score).toBeGreaterThanOrEqual(0.90);
+      expect(response.results[0].score).toBeGreaterThanOrEqual(0.9);
     });
 
-    it('should combine multiple filters effectively', async () => {
+    it("should combine multiple filters effectively", async () => {
       const request: ExpandedSearchRequest = {
         query: "",
         userID: "user1",
@@ -349,32 +364,35 @@ describe('Context Expansion and Filtering', () => {
           documentTypes: ["tutorial", "guide"],
           tags: ["ai"],
           metadata: {
-            category: "technical"
-          }
-        }
+            category: "technical",
+          },
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
 
       expect(response.results).toHaveLength(2);
-      expect(response.results.every(r => 
-        ["tutorial", "guide"].includes(r.documentType || '') &&
-        r.tags?.includes("ai") &&
-        r.metadata?.category === "technical"
-      )).toBe(true);
+      expect(
+        response.results.every(
+          (r) =>
+            ["tutorial", "guide"].includes(r.documentType || "") &&
+            r.tags?.includes("ai") &&
+            r.metadata?.category === "technical"
+        )
+      ).toBe(true);
     });
   });
 
-  describe('Context Expansion', () => {
-    it('should include related chunks from the same document', async () => {
+  describe("Context Expansion", () => {
+    it("should include related chunks from the same document", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning algorithms",
         userID: "user1",
         contextExpansion: {
           includeRelatedChunks: true,
           maxRelatedChunks: 2,
-          relatedChunkRadius: 1
-        }
+          relatedChunkRadius: 1,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -385,13 +403,13 @@ describe('Context Expansion and Filtering', () => {
       expect(response.expandedResults).toBeGreaterThan(0);
     });
 
-    it('should include document metadata when requested', async () => {
+    it("should include document metadata when requested", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning",
         userID: "user1",
         contextExpansion: {
-          includeDocumentMetadata: true
-        }
+          includeDocumentMetadata: true,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -401,14 +419,14 @@ describe('Context Expansion and Filtering', () => {
       expect(response.results[0].documentMetadata?.pages).toBeDefined();
     });
 
-    it('should enhance chunk metadata when requested', async () => {
+    it("should enhance chunk metadata when requested", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning",
         userID: "user1",
         contextExpansion: {
           includeChunkMetadata: true,
-          includeRelatedChunks: true
-        }
+          includeRelatedChunks: true,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -417,15 +435,15 @@ describe('Context Expansion and Filtering', () => {
       expect(response.results[0].metadata?.relatedChunkCount).toBeDefined();
     });
 
-    it('should respect related chunk radius settings', async () => {
+    it("should respect related chunk radius settings", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning algorithms",
         userID: "user1",
         contextExpansion: {
           includeRelatedChunks: true,
           relatedChunkRadius: 0, // Only exact adjacent chunks
-          maxRelatedChunks: 5
-        }
+          maxRelatedChunks: 5,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -434,21 +452,21 @@ describe('Context Expansion and Filtering', () => {
       expect(response.results[0].relatedChunks).toBeDefined();
       if (response.results[0].relatedChunks) {
         const mainChunkIndex = response.results[0].chunkIndex;
-        response.results[0].relatedChunks.forEach(chunk => {
+        response.results[0].relatedChunks.forEach((chunk) => {
           expect(Math.abs(chunk.chunkIndex - mainChunkIndex)).toBeLessThanOrEqual(1);
         });
       }
     });
 
-    it('should limit related chunks according to maxRelatedChunks', async () => {
+    it("should limit related chunks according to maxRelatedChunks", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning algorithms",
         userID: "user1",
         contextExpansion: {
           includeRelatedChunks: true,
           maxRelatedChunks: 1,
-          relatedChunkRadius: 5
-        }
+          relatedChunkRadius: 5,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -458,42 +476,42 @@ describe('Context Expansion and Filtering', () => {
     });
   });
 
-  describe('Combined Filtering and Expansion', () => {
-    it('should apply both filtering and context expansion', async () => {
+  describe("Combined Filtering and Expansion", () => {
+    it("should apply both filtering and context expansion", async () => {
       const request: ExpandedSearchRequest = {
         query: "learning",
         userID: "user1",
         filters: {
           documentTypes: ["tutorial"],
-          tags: ["ai"]
+          tags: ["ai"],
         },
         contextExpansion: {
           includeRelatedChunks: true,
           includeDocumentMetadata: true,
-          includeChunkMetadata: true
-        }
+          includeChunkMetadata: true,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
 
       expect(response.results.length).toBeGreaterThan(0);
-      expect(response.results.every(r => r.documentType === "tutorial")).toBe(true);
-      expect(response.results.every(r => r.tags?.includes("ai"))).toBe(true);
+      expect(response.results.every((r) => r.documentType === "tutorial")).toBe(true);
+      expect(response.results.every((r) => r.tags?.includes("ai"))).toBe(true);
       expect(response.results[0].documentMetadata).toBeDefined();
       expect(response.results[0].metadata?.expandedContext).toBe(true);
       expect(response.appliedFilters).toEqual(request.filters);
     });
 
-    it('should handle empty results gracefully with filters and expansion', async () => {
+    it("should handle empty results gracefully with filters and expansion", async () => {
       const request: ExpandedSearchRequest = {
         query: "nonexistent topic",
         userID: "user1",
         filters: {
-          documentTypes: ["nonexistent"]
+          documentTypes: ["nonexistent"],
         },
         contextExpansion: {
-          includeRelatedChunks: true
-        }
+          includeRelatedChunks: true,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -505,19 +523,19 @@ describe('Context Expansion and Filtering', () => {
     });
   });
 
-  describe('Performance and Edge Cases', () => {
-    it('should complete filtering and expansion within reasonable time', async () => {
+  describe("Performance and Edge Cases", () => {
+    it("should complete filtering and expansion within reasonable time", async () => {
       const request: ExpandedSearchRequest = {
         query: "",
         userID: "user1",
         filters: {
-          metadata: { category: "technical" }
+          metadata: { category: "technical" },
         },
         contextExpansion: {
           includeRelatedChunks: true,
           includeDocumentMetadata: true,
-          includeChunkMetadata: true
-        }
+          includeChunkMetadata: true,
+        },
       };
 
       const startTime = Date.now();
@@ -528,27 +546,27 @@ describe('Context Expansion and Filtering', () => {
       expect(response.processingTime).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle complex filter combinations without errors', async () => {
+    it("should handle complex filter combinations without errors", async () => {
       const request: ExpandedSearchRequest = {
         query: "data",
         userID: "user1",
         filters: {
           documentTypes: ["tutorial", "guide", "research"],
           dateRange: {
-            start: new Date('2024-01-01'),
-            end: new Date('2024-12-31')
+            start: new Date("2024-01-01"),
+            end: new Date("2024-12-31"),
           },
           tags: ["ai", "visualization", "python"],
           metadata: { category: "technical" },
-          minScore: 0.5
+          minScore: 0.5,
         },
         contextExpansion: {
           includeRelatedChunks: true,
           maxRelatedChunks: 3,
           relatedChunkRadius: 2,
           includeDocumentMetadata: true,
-          includeChunkMetadata: true
-        }
+          includeChunkMetadata: true,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);
@@ -559,13 +577,13 @@ describe('Context Expansion and Filtering', () => {
       expect(response.appliedFilters).toEqual(request.filters);
     });
 
-    it('should preserve search result ordering after expansion', async () => {
+    it("should preserve search result ordering after expansion", async () => {
       const request: ExpandedSearchRequest = {
         query: "machine learning",
         userID: "user1",
         contextExpansion: {
-          includeRelatedChunks: true
-        }
+          includeRelatedChunks: true,
+        },
       };
 
       const response = await mockService.searchWithFiltersAndExpansion(request);

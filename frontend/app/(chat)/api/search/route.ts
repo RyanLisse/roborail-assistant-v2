@@ -1,5 +1,5 @@
 import { searchKnowledgeBase } from "@/lib/api/backend-client";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 export const maxDuration = 30;

@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { 
-  estimateTokenCount,
-  calculateMessagePriority,
-  prepareMessagesWithMetadata,
-  truncateMessage,
-  pruneConversationHistory,
-  manageRAGContext,
-  analyzeConversationPatterns,
+import { beforeEach, describe, expect, it } from "vitest";
+import type { ConversationMessage } from "../db/schema";
+import {
   CONTEXT_LIMITS,
+  analyzeConversationPatterns,
+  calculateMessagePriority,
+  estimateTokenCount,
+  manageRAGContext,
+  prepareMessagesWithMetadata,
+  pruneConversationHistory,
+  truncateMessage,
 } from "./context-management";
-import { ConversationMessage } from "../db/schema";
 
 describe("Context Management", () => {
   describe("Token Estimation", () => {
@@ -21,7 +21,11 @@ describe("Context Management", () => {
   });
 
   describe("Message Priority Calculation", () => {
-    const createTestMessage = (content: string, role: "user" | "assistant", index: number): any => ({
+    const createTestMessage = (
+      content: string,
+      role: "user" | "assistant",
+      index: number
+    ): any => ({
       id: `msg-${index}`,
       role,
       content,
@@ -66,8 +70,16 @@ describe("Context Management", () => {
 
       const messageWithoutCitations = createTestMessage("message without citations", "user", 0);
 
-      const withCitationsPriority = calculateMessagePriority(messageWithCitations, [messageWithCitations], 0);
-      const withoutCitationsPriority = calculateMessagePriority(messageWithoutCitations, [messageWithoutCitations], 0);
+      const withCitationsPriority = calculateMessagePriority(
+        messageWithCitations,
+        [messageWithCitations],
+        0
+      );
+      const withoutCitationsPriority = calculateMessagePriority(
+        messageWithoutCitations,
+        [messageWithoutCitations],
+        0
+      );
 
       expect(withCitationsPriority).toBeGreaterThan(withoutCitationsPriority);
     });
@@ -96,7 +108,11 @@ describe("Context Management", () => {
   });
 
   describe("Conversation History Pruning", () => {
-    const createConversationMessage = (content: string, role: "user" | "assistant", index: number): ConversationMessage => ({
+    const createConversationMessage = (
+      content: string,
+      role: "user" | "assistant",
+      index: number
+    ): ConversationMessage => ({
       id: `msg-${index}`,
       conversationId: "test-conv",
       role,
@@ -119,11 +135,11 @@ describe("Context Management", () => {
       });
 
       expect(pruned).toHaveLength(3);
-      expect(pruned.map(m => m.content)).toEqual(["Message 1", "Message 2", "Message 3"]);
+      expect(pruned.map((m) => m.content)).toEqual(["Message 1", "Message 2", "Message 3"]);
     });
 
     it("should respect maxMessages limit", () => {
-      const messages = Array.from({ length: 10 }, (_, i) => 
+      const messages = Array.from({ length: 10 }, (_, i) =>
         createConversationMessage(`Message ${i + 1}`, "user", i)
       );
 
@@ -157,7 +173,7 @@ describe("Context Management", () => {
 
       const totalChars = pruned.reduce((sum, msg) => sum + msg.content.length, 0);
       expect(totalChars).toBeLessThanOrEqual(2000);
-      
+
       // Should always include minimum recent messages
       expect(pruned.length).toBeGreaterThanOrEqual(2);
     });
@@ -171,8 +187,8 @@ describe("Context Management", () => {
       ];
 
       const pruned = pruneConversationHistory(messages);
-      const contents = pruned.map(m => m.content);
-      
+      const contents = pruned.map((m) => m.content);
+
       // Check if the order matches the original chronological order
       expect(contents.indexOf("First")).toBeLessThan(contents.indexOf("Second"));
       expect(contents.indexOf("Second")).toBeLessThan(contents.indexOf("Third"));
@@ -180,7 +196,11 @@ describe("Context Management", () => {
   });
 
   describe("RAG Context Management", () => {
-    const createConversationMessage = (content: string, role: "user" | "assistant", index: number): ConversationMessage => ({
+    const createConversationMessage = (
+      content: string,
+      role: "user" | "assistant",
+      index: number
+    ): ConversationMessage => ({
       id: `msg-${index}`,
       conversationId: "test-conv",
       role,
@@ -190,11 +210,12 @@ describe("Context Management", () => {
     });
 
     it("should balance conversation history and document context", () => {
-      const messages = Array.from({ length: 20 }, (_, i) => 
+      const messages = Array.from({ length: 20 }, (_, i) =>
         createConversationMessage(`Message ${i + 1} with content`, "user", i)
       );
 
-      const documentContext = "This is a large document context that takes up significant space and tokens";
+      const documentContext =
+        "This is a large document context that takes up significant space and tokens";
 
       const result = manageRAGContext(messages, documentContext, {
         maxContextTokens: 200,
@@ -207,9 +228,7 @@ describe("Context Management", () => {
     });
 
     it("should reserve space for response generation", () => {
-      const messages = [
-        createConversationMessage("Short message", "user", 0),
-      ];
+      const messages = [createConversationMessage("Short message", "user", 0)];
 
       const documentContext = "Small document context";
 
@@ -222,7 +241,11 @@ describe("Context Management", () => {
   });
 
   describe("Conversation Pattern Analysis", () => {
-    const createConversationMessage = (content: string, role: "user" | "assistant", index: number): ConversationMessage => ({
+    const createConversationMessage = (
+      content: string,
+      role: "user" | "assistant",
+      index: number
+    ): ConversationMessage => ({
       id: `msg-${index}`,
       conversationId: "test-conv",
       role,
@@ -236,7 +259,11 @@ describe("Context Management", () => {
         createConversationMessage("Tell me about machine learning algorithms", "user", 0),
         createConversationMessage("Machine learning involves training algorithms", "assistant", 1),
         createConversationMessage("What algorithms are best for classification?", "user", 2),
-        createConversationMessage("Classification algorithms include neural networks", "assistant", 3),
+        createConversationMessage(
+          "Classification algorithms include neural networks",
+          "assistant",
+          3
+        ),
       ];
 
       const analysis = analyzeConversationPatterns(messages);
@@ -261,7 +288,7 @@ describe("Context Management", () => {
 
     it("should identify conversation trends", () => {
       // Test extended conversation
-      const manyMessages = Array.from({ length: 15 }, (_, i) => 
+      const manyMessages = Array.from({ length: 15 }, (_, i) =>
         createConversationMessage(`Message ${i + 1}`, "user", i)
       );
 
@@ -273,12 +300,14 @@ describe("Context Management", () => {
         createConversationMessage("Tell me about this document", "user", 0),
         {
           ...createConversationMessage("Based on the document...", "assistant", 1),
-          citations: [{ 
-            documentId: "doc1", 
-            filename: "file.pdf",
-            chunkContent: "sample content",
-            relevanceScore: 0.9
-          }],
+          citations: [
+            {
+              documentId: "doc1",
+              filename: "file.pdf",
+              chunkContent: "sample content",
+              relevanceScore: 0.9,
+            },
+          ],
         },
       ];
 

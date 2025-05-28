@@ -1,13 +1,18 @@
+import { and, asc, count, desc, eq, ilike, like, sql } from "drizzle-orm";
 import { api } from "encore.dev/api";
+import log from "encore.dev/log";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "../db/connection";
-import { documents, documentChunks, type Document as DBDocument, type DocumentChunk } from "../db/schema";
-import { eq, and, desc, asc, like, ilike, count, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import log from "encore.dev/log";
+import {
+  type Document as DBDocument,
+  type DocumentChunk,
+  documentChunks,
+  documents,
+} from "../db/schema";
 import { CacheService } from "../lib/cache/cache.service";
-import { type DocumentMetadataCacheKey } from "../lib/infrastructure/cache/cache";
 import type { PlaceholderDocumentObject } from "../lib/cache/cache.service";
+import type { DocumentMetadataCacheKey } from "../lib/infrastructure/cache/cache";
 
 // Create a service-specific logger instance
 const logger = log.with({ service: "docmgmt-service" });
@@ -101,13 +106,16 @@ function formatDocumentResponse(doc: DBDocument): Document {
   };
 }
 
-async function verifyDocumentAccess(documentId: string, userId: string): Promise<DBDocument | null> {
+async function verifyDocumentAccess(
+  documentId: string,
+  userId: string
+): Promise<DBDocument | null> {
   const result = await db
     .select()
     .from(documents)
     .where(and(eq(documents.id, documentId), eq(documents.userId, userId)))
     .limit(1);
-  
+
   return result[0] || null;
 }
 
@@ -136,20 +144,20 @@ export const getDocuments = api(
       // Validate and parse request
       const validated = DocumentFilterSchema.parse(request);
       const { userId, page, limit, status, contentType, search, sortBy, sortOrder } = validated;
-      
+
       const offset = (page - 1) * limit;
-      
+
       // Build query conditions
       const conditions = [eq(documents.userId, userId)];
-      
+
       if (status) {
         conditions.push(eq(documents.status, status));
       }
-      
+
       if (contentType) {
         conditions.push(eq(documents.contentType, contentType));
       }
-      
+
       // Add search functionality
       if (search) {
         const searchTerm = `%${search.toLowerCase()}%`;
@@ -161,21 +169,24 @@ export const getDocuments = api(
           )`
         );
       }
-      
+
       // Determine sort order
-      const sortColumn = sortBy === "filename" ? documents.filename : 
-                        sortBy === "fileSize" ? documents.fileSize : 
-                        documents.uploadedAt;
+      const sortColumn =
+        sortBy === "filename"
+          ? documents.filename
+          : sortBy === "fileSize"
+            ? documents.fileSize
+            : documents.uploadedAt;
       const orderFn = sortOrder === "asc" ? asc : desc;
-      
+
       // Get total count
       const totalResult = await db
         .select({ count: count() })
         .from(documents)
         .where(and(...conditions));
-      
+
       const total = totalResult[0].count;
-      
+
       // Get paginated results
       const results = await db
         .select()
@@ -184,11 +195,11 @@ export const getDocuments = api(
         .orderBy(orderFn(sortColumn))
         .limit(limit + 1) // Get one extra to check if there are more
         .offset(offset);
-      
+
       // Check if there are more results
       const hasMore = results.length > limit;
       const documentsData = hasMore ? results.slice(0, -1) : results;
-      
+
       return {
         documents: documentsData.map(formatDocumentResponse),
         total,
@@ -196,10 +207,9 @@ export const getDocuments = api(
         limit,
         hasMore,
       };
-      
     } catch (error) {
-      console.error('Error retrieving documents:', error);
-      const errorMessage = 'Failed to retrieve documents';
+      console.error("Error retrieving documents:", error);
+      const errorMessage = "Failed to retrieve documents";
       if (error instanceof Error) {
         logger.error(error, errorMessage, {
           userId: request.userId,
@@ -214,7 +224,9 @@ export const getDocuments = api(
           error: error,
         });
       }
-      throw new Error(`Failed to retrieve documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to retrieve documents: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -244,16 +256,16 @@ export const getDocument = api(
       }
 
       const doc = await verifyDocumentAccess(documentId, userId);
-      
+
       if (!doc) {
         throw new Error("Document not found or access denied");
       }
-      
+
       logger.info("Successfully retrieved document from DB", {
         documentId: documentId,
         userId: userId,
       });
-      
+
       // Cache the document metadata after fetching from DB
       // Ensure the object structure matches PlaceholderDocumentObject
       const docToCache: PlaceholderDocumentObject = {
@@ -272,10 +284,9 @@ export const getDocument = api(
       await CacheService.setCachedDocumentMetadata(cacheKey, docToCache);
 
       return formatDocumentResponse(doc);
-      
     } catch (error) {
-      console.error('Error retrieving document:', error);
-      const errorMessage = 'Failed to retrieve document';
+      console.error("Error retrieving document:", error);
+      const errorMessage = "Failed to retrieve document";
       if (error instanceof Error) {
         logger.error(error, errorMessage, {
           documentId: documentId,
@@ -288,7 +299,9 @@ export const getDocument = api(
           error: error,
         });
       }
-      throw new Error(`Failed to retrieve document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to retrieve document: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -322,18 +335,18 @@ export const updateDocument = api(
         metadata,
         filename,
       });
-      
+
       // Verify document access
       const existingDoc = await verifyDocumentAccess(documentId, userId);
       if (!existingDoc) {
         throw new Error("Document not found or access denied");
       }
-      
+
       // Prepare update data
       const updateData: Partial<DBDocument> = {
         updatedAt: new Date(),
       };
-      
+
       if (metadata) {
         // Merge with existing metadata
         updateData.metadata = {
@@ -341,22 +354,22 @@ export const updateDocument = api(
           ...metadata,
         };
       }
-      
+
       if (filename) {
         updateData.filename = filename;
       }
-      
+
       // Update document in database
       const result = await db
         .update(documents)
         .set(updateData)
         .where(eq(documents.id, documentId))
         .returning();
-      
+
       if (!result[0]) {
         throw new Error("Failed to update document");
       }
-      
+
       console.log(`Updated document ${documentId} metadata`);
       logger.info("Successfully updated document", {
         documentId: documentId,
@@ -369,10 +382,9 @@ export const updateDocument = api(
       await CacheService.deleteCachedDocumentMetadata(cacheKey);
 
       return formatDocumentResponse(result[0]);
-      
     } catch (error) {
-      console.error('Error updating document:', error);
-      const errorMessage = 'Failed to update document';
+      console.error("Error updating document:", error);
+      const errorMessage = "Failed to update document";
       if (error instanceof Error) {
         logger.error(error, errorMessage, {
           documentId: documentId,
@@ -387,7 +399,9 @@ export const updateDocument = api(
           error: error,
         });
       }
-      throw new Error(`Failed to update document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to update document: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -395,7 +409,10 @@ export const updateDocument = api(
 // Delete document
 export const deleteDocument = api(
   { expose: true, method: "DELETE", path: "/documents/:documentId" },
-  async ({ documentId, userId }: { documentId: string; userId: string }): Promise<{ success: boolean }> => {
+  async ({
+    documentId,
+    userId,
+  }: { documentId: string; userId: string }): Promise<{ success: boolean }> => {
     try {
       logger.info("Received request to delete document", {
         documentId: documentId,
@@ -407,24 +424,24 @@ export const deleteDocument = api(
       if (!existingDoc) {
         throw new Error("Document not found or access denied");
       }
-      
+
       // Start transaction - delete document and all related data
       // Note: Due to foreign key constraints, chunks will be deleted automatically
       const result = await db
         .delete(documents)
         .where(and(eq(documents.id, documentId), eq(documents.userId, userId)))
         .returning();
-      
+
       if (!result[0]) {
         throw new Error("Failed to delete document");
       }
-      
+
       console.log(`Deleted document ${documentId} and all associated data`);
       logger.info("Successfully deleted document", {
         documentId: documentId,
         userId: userId,
       });
-      
+
       // Invalidate cache for this document
       const cacheKey: DocumentMetadataCacheKey = { documentId };
       await CacheService.deleteCachedDocumentMetadata(cacheKey);
@@ -432,10 +449,9 @@ export const deleteDocument = api(
       return {
         success: true,
       };
-      
     } catch (error) {
-      console.error('Error deleting document:', error);
-      const errorMessage = 'Failed to delete document';
+      console.error("Error deleting document:", error);
+      const errorMessage = "Failed to delete document";
       if (error instanceof Error) {
         logger.error(error, errorMessage, {
           documentId: documentId,
@@ -448,7 +464,9 @@ export const deleteDocument = api(
           error: error,
         });
       }
-      throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to delete document: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -473,17 +491,17 @@ export const getDocumentChunks = api(
       if (!doc) {
         throw new Error("Document not found or access denied");
       }
-      
+
       const offset = (page - 1) * limit;
-      
+
       // Get total count of chunks
       const totalResult = await db
         .select({ count: count() })
         .from(documentChunks)
         .where(eq(documentChunks.documentId, documentId));
-      
+
       const total = totalResult[0].count;
-      
+
       // Get paginated chunks
       const results = await db
         .select()
@@ -492,13 +510,13 @@ export const getDocumentChunks = api(
         .orderBy(asc(documentChunks.chunkIndex))
         .limit(limit + 1)
         .offset(offset);
-      
+
       // Check if there are more results
       const hasMore = results.length > limit;
       const chunksData = hasMore ? results.slice(0, -1) : results;
-      
+
       return {
-        chunks: chunksData.map(chunk => ({
+        chunks: chunksData.map((chunk) => ({
           id: chunk.id,
           content: chunk.content,
           chunkIndex: chunk.chunkIndex,
@@ -512,10 +530,11 @@ export const getDocumentChunks = api(
         limit,
         hasMore,
       };
-      
     } catch (error) {
-      console.error('Error retrieving document chunks:', error);
-      throw new Error(`Failed to retrieve document chunks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving document chunks:", error);
+      throw new Error(
+        `Failed to retrieve document chunks: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -536,7 +555,7 @@ export const getDocumentStats = api(
       if (!doc) {
         throw new Error("Document not found or access denied");
       }
-      
+
       // Get chunk statistics
       const chunkStats = await db
         .select({
@@ -546,23 +565,26 @@ export const getDocumentStats = api(
         })
         .from(documentChunks)
         .where(eq(documentChunks.documentId, documentId));
-      
+
       const stats = chunkStats[0];
-      
+
       // Calculate processing duration if available
-      const processingDuration = doc.processedAt && doc.uploadedAt ? 
-        doc.processedAt.getTime() - doc.uploadedAt.getTime() : undefined;
-      
+      const processingDuration =
+        doc.processedAt && doc.uploadedAt
+          ? doc.processedAt.getTime() - doc.uploadedAt.getTime()
+          : undefined;
+
       return {
         totalChunks: Number(stats.totalChunks) || 0,
         totalTokens: Number(stats.totalTokens) || 0,
         averageChunkSize: Number(stats.averageChunkSize) || 0,
         processingDuration,
       };
-      
     } catch (error) {
-      console.error('Error retrieving document stats:', error);
-      throw new Error(`Failed to retrieve document stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving document stats:", error);
+      throw new Error(
+        `Failed to retrieve document stats: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -589,38 +611,39 @@ export const updateProcessingStatus = api(
         chunkCount,
         errorMessage,
       });
-      
+
       // Prepare update data
       const updateData: Partial<DBDocument> = {
         status: validated.status,
         updatedAt: new Date(),
       };
-      
+
       if (status === "processed") {
         updateData.processedAt = new Date();
       }
-      
+
       if (chunkCount !== undefined) {
         updateData.chunkCount = chunkCount;
       }
-      
+
       // Update document status
       const result = await db
         .update(documents)
         .set(updateData)
         .where(eq(documents.id, documentId))
         .returning();
-      
+
       if (!result[0]) {
         throw new Error("Document not found");
       }
-      
+
       console.log(`Updated document ${documentId} status to ${status}`);
       return formatDocumentResponse(result[0]);
-      
     } catch (error) {
-      console.error('Error updating document processing status:', error);
-      throw new Error(`Failed to update processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error updating document processing status:", error);
+      throw new Error(
+        `Failed to update processing status: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );

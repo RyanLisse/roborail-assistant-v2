@@ -18,7 +18,7 @@ export interface ParseResponse {
   metadata: DocumentMetadata;
   elements: ParsedElement[];
   processingTime: number;
-  status: 'success' | 'error';
+  status: "success" | "error";
 }
 
 export interface DocumentMetadata {
@@ -32,7 +32,7 @@ export interface DocumentMetadata {
 }
 
 export interface ParsedElement {
-  type: 'title' | 'text' | 'table' | 'list' | 'header' | 'footer';
+  type: "title" | "text" | "table" | "list" | "header" | "footer";
   content: string;
   page?: number;
   confidence?: number;
@@ -47,33 +47,33 @@ export interface BoundingBox {
 }
 
 export interface ParseError {
-  type: 'UNSUPPORTED_FORMAT' | 'API_ERROR' | 'INVALID_DOCUMENT' | 'PROCESSING_FAILED';
+  type: "UNSUPPORTED_FORMAT" | "API_ERROR" | "INVALID_DOCUMENT" | "PROCESSING_FAILED";
   message: string;
   documentId?: string;
 }
 
 // Supported content types for parsing
 const SUPPORTED_CONTENT_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/msword',
-  'text/plain',
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "text/plain",
 ];
 
 // Unstructured.io API endpoints
-const UNSTRUCTURED_API_BASE = 'https://api.unstructured.io';
+const UNSTRUCTURED_API_BASE = "https://api.unstructured.io";
 const PARTITION_ENDPOINT = `${UNSTRUCTURED_API_BASE}/general/v0/general`;
 
 // Main parsing function
 export async function parseDocument(request: ParseRequest): Promise<ParseResponse> {
   const startTime = Date.now();
-  
+
   try {
     // Validate content type
     if (!isValidContentType(request.contentType)) {
       const error: ParseError = {
-        type: 'UNSUPPORTED_FORMAT',
-        message: `Unsupported file format: ${request.contentType}. Supported formats: ${SUPPORTED_CONTENT_TYPES.join(', ')}`,
+        type: "UNSUPPORTED_FORMAT",
+        message: `Unsupported file format: ${request.contentType}. Supported formats: ${SUPPORTED_CONTENT_TYPES.join(", ")}`,
         documentId: request.documentId,
       };
       throw error;
@@ -81,10 +81,10 @@ export async function parseDocument(request: ParseRequest): Promise<ParseRespons
 
     // Download file from bucket
     const fileData = await downloadFromBucket({ bucketPath: request.bucketPath });
-    
+
     // Process document based on content type
     let parsedData;
-    if (request.contentType === 'text/plain') {
+    if (request.contentType === "text/plain") {
       // Handle plain text files directly
       parsedData = await processPlainTextDocument(fileData.data, request);
     } else {
@@ -110,23 +110,22 @@ export async function parseDocument(request: ParseRequest): Promise<ParseRespons
       metadata,
       elements,
       processingTime,
-      status: 'success',
+      status: "success",
     };
 
     return response;
-
   } catch (error) {
-    console.error('Document parsing error:', error);
-    
+    console.error("Document parsing error:", error);
+
     // If already a ParseError, re-throw as is
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
 
     // Create a generic parsing error
     const parseError: ParseError = {
-      type: 'PROCESSING_FAILED',
-      message: error instanceof Error ? error.message : 'Unknown parsing error',
+      type: "PROCESSING_FAILED",
+      message: error instanceof Error ? error.message : "Unknown parsing error",
       documentId: request.documentId,
     };
     throw parseError;
@@ -140,13 +139,13 @@ export function isValidContentType(contentType: string): boolean {
 
 // Process plain text documents
 async function processPlainTextDocument(fileData: Buffer, request: ParseRequest) {
-  const textContent = fileData.toString('utf-8');
-  
+  const textContent = fileData.toString("utf-8");
+
   // Create simple structure for plain text
   return {
     elements: [
       {
-        type: 'text',
+        type: "text",
         text: textContent,
         metadata: {
           filename: request.fileName,
@@ -161,23 +160,23 @@ async function processWithUnstructured(fileData: Buffer, request: ParseRequest) 
   try {
     // Prepare form data for Unstructured.io API
     const formData = new FormData();
-    
+
     // Add the file as a blob
     const blob = new Blob([fileData], { type: request.contentType });
-    formData.append('files', blob, request.fileName);
-    
+    formData.append("files", blob, request.fileName);
+
     // Add strategy parameter for better parsing
-    formData.append('strategy', 'hi_res');
-    
+    formData.append("strategy", "hi_res");
+
     // Add other parameters
-    formData.append('extract_image_block_types', '["Image", "Table"]');
-    formData.append('infer_table_structure', 'true');
+    formData.append("extract_image_block_types", '["Image", "Table"]');
+    formData.append("infer_table_structure", "true");
 
     // Make API request to Unstructured.io
     const response = await fetch(PARTITION_ENDPOINT, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${unstructuredApiKey()}`,
+        Authorization: `Bearer ${unstructuredApiKey()}`,
       },
       body: formData,
     });
@@ -185,7 +184,7 @@ async function processWithUnstructured(fileData: Buffer, request: ParseRequest) 
     if (!response.ok) {
       const errorText = await response.text();
       const error: ParseError = {
-        type: 'API_ERROR',
+        type: "API_ERROR",
         message: `Unstructured.io API error: ${response.status} ${response.statusText} - ${errorText}`,
         documentId: request.documentId,
       };
@@ -194,18 +193,17 @@ async function processWithUnstructured(fileData: Buffer, request: ParseRequest) 
 
     const parsedData = await response.json();
     return parsedData;
-
   } catch (error) {
-    console.error('Unstructured.io API error:', error);
-    
+    console.error("Unstructured.io API error:", error);
+
     // If already a ParseError, re-throw
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
 
     const parseError: ParseError = {
-      type: 'API_ERROR',
-      message: error instanceof Error ? error.message : 'Failed to call Unstructured.io API',
+      type: "API_ERROR",
+      message: error instanceof Error ? error.message : "Failed to call Unstructured.io API",
       documentId: request.documentId,
     };
     throw parseError;
@@ -222,8 +220,8 @@ function extractMetadata(parsedData: any, fileData: any): DocumentMetadata {
 
   // Try to extract title from first title element
   if (parsedData.elements) {
-    const titleElement = parsedData.elements.find((el: any) => 
-      el.type === 'Title' || el.category === 'Title'
+    const titleElement = parsedData.elements.find(
+      (el: any) => el.type === "Title" || el.category === "Title"
     );
     if (titleElement && titleElement.text) {
       metadata.title = titleElement.text;
@@ -243,7 +241,7 @@ function extractMetadata(parsedData: any, fileData: any): DocumentMetadata {
   }
 
   // Set language (default to English for now)
-  metadata.language = 'en';
+  metadata.language = "en";
 
   // Set last modified from file data if available
   if (fileData.lastModified) {
@@ -261,7 +259,7 @@ function extractElements(parsedData: any): ParsedElement[] {
     for (const element of parsedData.elements) {
       const parsedElement: ParsedElement = {
         type: mapElementType(element.type || element.category),
-        content: element.text || element.content || '',
+        content: element.text || element.content || "",
       };
 
       // Add page number if available
@@ -293,26 +291,26 @@ function extractElements(parsedData: any): ParsedElement[] {
 }
 
 // Map Unstructured.io element types to our types
-function mapElementType(unstructuredType: string): ParsedElement['type'] {
-  const typeMap: Record<string, ParsedElement['type']> = {
-    'Title': 'title',
-    'NarrativeText': 'text',
-    'Text': 'text',
-    'Table': 'table',
-    'ListItem': 'list',
-    'Header': 'header',
-    'Footer': 'footer',
+function mapElementType(unstructuredType: string): ParsedElement["type"] {
+  const typeMap: Record<string, ParsedElement["type"]> = {
+    Title: "title",
+    NarrativeText: "text",
+    Text: "text",
+    Table: "table",
+    ListItem: "list",
+    Header: "header",
+    Footer: "footer",
   };
 
-  return typeMap[unstructuredType] || 'text';
+  return typeMap[unstructuredType] || "text";
 }
 
 // Combine all extracted text from elements
 function combineExtractedText(elements: ParsedElement[]): string {
   return elements
-    .map(element => element.content)
-    .filter(content => content && content.trim().length > 0)
-    .join('\n\n');
+    .map((element) => element.content)
+    .filter((content) => content && content.trim().length > 0)
+    .join("\n\n");
 }
 
 // Extract word count from text
@@ -320,13 +318,13 @@ export function extractWordCount(text: string): number {
   if (!text || text.trim().length === 0) {
     return 0;
   }
-  return text.split(/\s+/).filter(word => word.length > 0).length;
+  return text.split(/\s+/).filter((word) => word.length > 0).length;
 }
 
 // Helper function to determine if document needs OCR
 function needsOCR(contentType: string): boolean {
   // For now, we'll let Unstructured.io decide based on content
-  return contentType === 'application/pdf';
+  return contentType === "application/pdf";
 }
 
 // Helper function to validate parsed response

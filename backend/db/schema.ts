@@ -1,21 +1,28 @@
-import { 
-  pgTable, 
-  text, 
-  bigint, 
-  timestamp, 
-  integer, 
-  jsonb, 
-  vector,
-  index
-} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  vector,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 // Zod schemas for validation
 export const DocumentStatus = z.enum(["uploaded", "processing", "processed", "failed"]);
 export const MessageRole = z.enum(["user", "assistant"]);
 export const ProcessingStage = z.enum(["upload", "parsing", "chunking", "embedding", "indexing"]);
-export const ProcessingStatus = z.enum(["pending", "in_progress", "completed", "failed", "cancelled"]);
+export const ProcessingStatus = z.enum([
+  "pending",
+  "in_progress",
+  "completed",
+  "failed",
+  "cancelled",
+]);
 
 // Documents table - stores uploaded document metadata
 export const documents = pgTable(
@@ -38,8 +45,12 @@ export const documents = pgTable(
     statusIdx: index("documents_status_idx").on(table.status),
     uploadedAtIdx: index("documents_uploaded_at_idx").on(table.uploadedAt),
     filenameLowerIdx: index("documents_filename_lower_idx").on(sql`lower(${table.filename})`),
-    originalNameLowerIdx: index("documents_original_name_lower_idx").on(sql`lower(${table.originalName})`),
-    metadataTitleLowerIdx: index("documents_metadata_title_lower_idx").on(sql`lower(metadata->>'title')`),
+    originalNameLowerIdx: index("documents_original_name_lower_idx").on(
+      sql`lower(${table.originalName})`
+    ),
+    metadataTitleLowerIdx: index("documents_metadata_title_lower_idx").on(
+      sql`lower(metadata->>'title')`
+    ),
   })
 );
 
@@ -48,7 +59,9 @@ export const documentChunks = pgTable(
   "document_chunks",
   {
     id: text("id").primaryKey(),
-    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
     // Vector embedding (1024 dimensions for Cohere embed-v4.0)
     embedding: vector("embedding", { dimensions: 1024 }),
@@ -62,7 +75,10 @@ export const documentChunks = pgTable(
     documentIdIdx: index("chunks_document_id_idx").on(table.documentId),
     chunkIndexIdx: index("chunks_chunk_index_idx").on(table.chunkIndex),
     // HNSW index for vector similarity search
-    embeddingIdx: index("document_chunks_embedding_idx").using("hnsw", table.embedding.op("vector_cosine_ops")),
+    embeddingIdx: index("document_chunks_embedding_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops")
+    ),
   })
 );
 
@@ -75,11 +91,16 @@ export const conversations = pgTable(
     title: text("title").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    isDraft: boolean("is_draft").notNull().default(false),
+    metadata: jsonb("metadata"),
   },
   (table) => ({
     userIdIdx: index("conversations_user_id_idx").on(table.userId),
     updatedAtIdx: index("conversations_updated_at_idx").on(table.updatedAt),
-    userIdUpdatedAtIdx: index("conversations_user_id_updated_at_idx").on(table.userId, table.updatedAt),
+    userIdUpdatedAtIdx: index("conversations_user_id_updated_at_idx").on(
+      table.userId,
+      table.updatedAt
+    ),
   })
 );
 
@@ -88,17 +109,21 @@ export const conversationMessages = pgTable(
   "conversation_messages",
   {
     id: text("id").primaryKey(),
-    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role").notNull().$type<z.infer<typeof MessageRole>>(),
     content: text("content").notNull(),
     // Citations stored as JSONB array
-    citations: jsonb("citations").notNull().default("[]").$type<Array<{
-      documentId: string;
-      filename: string;
-      pageNumber?: number;
-      chunkContent: string;
-      relevanceScore: number;
-    }>>(),
+    citations: jsonb("citations").notNull().default("[]").$type<
+      Array<{
+        documentId: string;
+        filename: string;
+        pageNumber?: number;
+        chunkContent: string;
+        relevanceScore: number;
+      }>
+    >(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -112,20 +137,27 @@ export const documentProcessingStatus = pgTable(
   "document_processing_status",
   {
     id: text("id").primaryKey(),
-    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull(),
     currentStage: text("current_stage").notNull().$type<z.infer<typeof ProcessingStage>>(),
     overallStatus: text("overall_status").notNull().$type<z.infer<typeof ProcessingStatus>>(),
     // Stage details stored as JSONB
-    stages: jsonb("stages").notNull().default("{}").$type<Record<string, {
-      status: "pending" | "in_progress" | "completed" | "failed";
-      startedAt?: string;
-      completedAt?: string;
-      errorMessage?: string;
-      retryCount?: number;
-      estimatedDuration?: number;
-      actualDuration?: number;
-    }>>(),
+    stages: jsonb("stages").notNull().default("{}").$type<
+      Record<
+        string,
+        {
+          status: "pending" | "in_progress" | "completed" | "failed";
+          startedAt?: string;
+          completedAt?: string;
+          errorMessage?: string;
+          retryCount?: number;
+          estimatedDuration?: number;
+          actualDuration?: number;
+        }
+      >
+    >(),
     // Processing metadata
     metadata: jsonb("metadata").notNull().default("{}").$type<{
       totalSize?: number;
@@ -182,8 +214,12 @@ export const collectionDocuments = pgTable(
   "collection_documents",
   {
     id: text("id").primaryKey(),
-    collectionId: text("collection_id").notNull().references(() => documentCollections.id, { onDelete: "cascade" }),
-    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => documentCollections.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
     addedBy: text("added_by").notNull(), // userId who added the document
   },
@@ -191,7 +227,10 @@ export const collectionDocuments = pgTable(
     collectionIdIdx: index("collection_docs_collection_id_idx").on(table.collectionId),
     documentIdIdx: index("collection_docs_document_id_idx").on(table.documentId),
     // Unique constraint to prevent duplicate document-collection pairs
-    uniqueCollectionDocument: index("collection_docs_unique_idx").on(table.collectionId, table.documentId),
+    uniqueCollectionDocument: index("collection_docs_unique_idx").on(
+      table.collectionId,
+      table.documentId
+    ),
   })
 );
 
@@ -200,7 +239,9 @@ export const documentTags = pgTable(
   "document_tags",
   {
     id: text("id").primaryKey(),
-    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
     tag: text("tag").notNull(),
     userId: text("user_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -298,13 +339,17 @@ export const createMessageSchema = z.object({
   conversationId: z.string().min(1),
   role: MessageRole,
   content: z.string().min(1),
-  citations: z.array(z.object({
-    documentId: z.string(),
-    filename: z.string(),
-    pageNumber: z.number().int().positive().optional(),
-    chunkContent: z.string(),
-    relevanceScore: z.number().min(0).max(1),
-  })).default([]),
+  citations: z
+    .array(
+      z.object({
+        documentId: z.string(),
+        filename: z.string(),
+        pageNumber: z.number().int().positive().optional(),
+        chunkContent: z.string(),
+        relevanceScore: z.number().min(0).max(1),
+      })
+    )
+    .default([]),
 });
 
 export const createProcessingStatusSchema = z.object({
@@ -313,22 +358,26 @@ export const createProcessingStatusSchema = z.object({
   userId: z.string().min(1),
   currentStage: ProcessingStage,
   overallStatus: ProcessingStatus,
-  stages: z.record(z.object({
-    status: z.enum(["pending", "in_progress", "completed", "failed"]),
-    startedAt: z.string().optional(),
-    completedAt: z.string().optional(),
-    errorMessage: z.string().optional(),
-    retryCount: z.number().int().min(0).optional(),
-    estimatedDuration: z.number().positive().optional(),
-    actualDuration: z.number().positive().optional(),
-  })),
-  metadata: z.object({
-    totalSize: z.number().positive().optional(),
-    estimatedDuration: z.number().positive().optional(),
-    chunkCount: z.number().int().min(0).optional(),
-    embeddingDimensions: z.number().int().positive().optional(),
-    indexingMethod: z.string().optional(),
-  }).default({}),
+  stages: z.record(
+    z.object({
+      status: z.enum(["pending", "in_progress", "completed", "failed"]),
+      startedAt: z.string().optional(),
+      completedAt: z.string().optional(),
+      errorMessage: z.string().optional(),
+      retryCount: z.number().int().min(0).optional(),
+      estimatedDuration: z.number().positive().optional(),
+      actualDuration: z.number().positive().optional(),
+    })
+  ),
+  metadata: z
+    .object({
+      totalSize: z.number().positive().optional(),
+      estimatedDuration: z.number().positive().optional(),
+      chunkCount: z.number().int().min(0).optional(),
+      embeddingDimensions: z.number().int().positive().optional(),
+      indexingMethod: z.string().optional(),
+    })
+    .default({}),
   errorMessage: z.string().optional(),
   retryCount: z.number().int().min(0).default(0),
   maxRetries: z.number().int().min(0).default(3),

@@ -3,7 +3,8 @@ import postgres from "postgres";
 import * as schema from "./schema";
 
 // Database connection configuration
-const connectionString = process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/roborail_db";
+const connectionString =
+  process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/roborail_db";
 
 // Create PostgreSQL connection
 const sql = postgres(connectionString);

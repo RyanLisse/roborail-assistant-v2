@@ -1,20 +1,20 @@
+import { and, asc, count, desc, eq, ilike, inArray, like, or, sql } from "drizzle-orm";
 import { api } from "encore.dev/api";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "../db/connection";
-import { 
-  documentCollections, 
-  collectionDocuments, 
-  documentTags, 
-  savedFilters,
-  documents,
-  type DocumentCollection,
-  type NewDocumentCollection,
+import {
   type CollectionDocument,
+  type DocumentCollection,
   type DocumentTag,
-  type NewSavedFilter
+  type NewDocumentCollection,
+  type NewSavedFilter,
+  collectionDocuments,
+  documentCollections,
+  documentTags,
+  documents,
+  savedFilters,
 } from "../db/schema";
-import { eq, and, desc, asc, like, ilike, count, sql, inArray, or } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 // Validation schemas
 export const CollectionCreateSchema = z.object({
@@ -22,7 +22,10 @@ export const CollectionCreateSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   isPublic: z.boolean().default(false),
-  color: z.string().regex(/^#[0-9A-F]{6}$/i).default("#3B82F6"),
+  color: z
+    .string()
+    .regex(/^#[0-9A-F]{6}$/i)
+    .default("#3B82F6"),
   tags: z.array(z.string().min(1).max(50)).default([]),
   metadata: z.record(z.any()).default({}),
 });
@@ -33,7 +36,10 @@ export const CollectionUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
   isPublic: z.boolean().optional(),
-  color: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9A-F]{6}$/i)
+    .optional(),
   tags: z.array(z.string().min(1).max(50)).optional(),
   metadata: z.record(z.any()).optional(),
 });
@@ -140,21 +146,21 @@ function formatCollectionResponse(collection: DocumentCollection): Collection {
   };
 }
 
-async function verifyCollectionAccess(collectionId: string, userId: string): Promise<DocumentCollection | null> {
+async function verifyCollectionAccess(
+  collectionId: string,
+  userId: string
+): Promise<DocumentCollection | null> {
   const result = await db
     .select()
     .from(documentCollections)
     .where(
       and(
         eq(documentCollections.id, collectionId),
-        or(
-          eq(documentCollections.userId, userId),
-          eq(documentCollections.isPublic, true)
-        )
+        or(eq(documentCollections.userId, userId), eq(documentCollections.isPublic, true))
       )
     )
     .limit(1);
-  
+
   return result[0] || null;
 }
 
@@ -172,7 +178,7 @@ export const createCollection = api(
   }): Promise<Collection> => {
     try {
       const validated = CollectionCreateSchema.parse(request);
-      
+
       const collectionId = `collection_${nanoid()}`;
       const collectionData: NewDocumentCollection = {
         id: collectionId,
@@ -185,18 +191,16 @@ export const createCollection = api(
         tags: validated.tags,
         metadata: validated.metadata,
       };
-      
-      const result = await db
-        .insert(documentCollections)
-        .values(collectionData)
-        .returning();
-      
+
+      const result = await db.insert(documentCollections).values(collectionData).returning();
+
       console.log(`Created collection ${collectionId} for user ${validated.userId}`);
       return formatCollectionResponse(result[0]);
-      
     } catch (error) {
-      console.error('Error creating collection:', error);
-      throw new Error(`Failed to create collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error creating collection:", error);
+      throw new Error(
+        `Failed to create collection: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -216,21 +220,18 @@ export const getCollections = api(
     try {
       const validated = CollectionFilterSchema.parse(request);
       const { userId, page, limit, search, tags, isPublic, sortBy, sortOrder } = validated;
-      
+
       const offset = (page - 1) * limit;
-      
+
       // Build query conditions
       const conditions = [
-        or(
-          eq(documentCollections.userId, userId),
-          eq(documentCollections.isPublic, true)
-        )
+        or(eq(documentCollections.userId, userId), eq(documentCollections.isPublic, true)),
       ];
-      
+
       if (isPublic !== undefined) {
         conditions.push(eq(documentCollections.isPublic, isPublic));
       }
-      
+
       if (search) {
         const searchTerm = `%${search.toLowerCase()}%`;
         conditions.push(
@@ -240,28 +241,32 @@ export const getCollections = api(
           )`
         );
       }
-      
+
       if (tags && tags.length > 0) {
         conditions.push(
-          sql`${documentCollections.tags} ?| array[${tags.map(tag => `'${tag}'`).join(',')}]`
+          sql`${documentCollections.tags} ?| array[${tags.map((tag) => `'${tag}'`).join(",")}]`
         );
       }
-      
+
       // Determine sort order
-      const sortColumn = sortBy === "name" ? documentCollections.name :
-                        sortBy === "createdAt" ? documentCollections.createdAt :
-                        sortBy === "documentCount" ? documentCollections.documentCount :
-                        documentCollections.updatedAt;
+      const sortColumn =
+        sortBy === "name"
+          ? documentCollections.name
+          : sortBy === "createdAt"
+            ? documentCollections.createdAt
+            : sortBy === "documentCount"
+              ? documentCollections.documentCount
+              : documentCollections.updatedAt;
       const orderFn = sortOrder === "asc" ? asc : desc;
-      
+
       // Get total count
       const totalResult = await db
         .select({ count: count() })
         .from(documentCollections)
         .where(and(...conditions));
-      
+
       const total = totalResult[0].count;
-      
+
       // Get paginated results
       const results = await db
         .select()
@@ -270,10 +275,10 @@ export const getCollections = api(
         .orderBy(orderFn(sortColumn))
         .limit(limit + 1)
         .offset(offset);
-      
+
       const hasMore = results.length > limit;
       const collectionsData = hasMore ? results.slice(0, -1) : results;
-      
+
       return {
         collections: collectionsData.map(formatCollectionResponse),
         total,
@@ -281,29 +286,34 @@ export const getCollections = api(
         limit,
         hasMore,
       };
-      
     } catch (error) {
-      console.error('Error retrieving collections:', error);
-      throw new Error(`Failed to retrieve collections: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving collections:", error);
+      throw new Error(
+        `Failed to retrieve collections: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
 
 export const getCollection = api(
   { expose: true, method: "GET", path: "/collections/:collectionId" },
-  async ({ collectionId, userId }: { collectionId: string; userId: string }): Promise<Collection> => {
+  async ({
+    collectionId,
+    userId,
+  }: { collectionId: string; userId: string }): Promise<Collection> => {
     try {
       const collection = await verifyCollectionAccess(collectionId, userId);
-      
+
       if (!collection) {
         throw new Error("Collection not found or access denied");
       }
-      
+
       return formatCollectionResponse(collection);
-      
     } catch (error) {
-      console.error('Error retrieving collection:', error);
-      throw new Error(`Failed to retrieve collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving collection:", error);
+      throw new Error(
+        `Failed to retrieve collection: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -340,23 +350,25 @@ export const updateCollection = api(
         tags,
         metadata,
       });
-      
+
       // Verify ownership (only owner can update)
       const existingCollection = await db
         .select()
         .from(documentCollections)
-        .where(and(eq(documentCollections.id, collectionId), eq(documentCollections.userId, userId)))
+        .where(
+          and(eq(documentCollections.id, collectionId), eq(documentCollections.userId, userId))
+        )
         .limit(1);
-      
+
       if (!existingCollection[0]) {
         throw new Error("Collection not found or access denied");
       }
-      
+
       // Prepare update data
       const updateData: Partial<DocumentCollection> = {
         updatedAt: new Date(),
       };
-      
+
       if (name) updateData.name = name;
       if (description !== undefined) updateData.description = description;
       if (isPublic !== undefined) updateData.isPublic = isPublic;
@@ -368,43 +380,50 @@ export const updateCollection = api(
           ...metadata,
         };
       }
-      
+
       const result = await db
         .update(documentCollections)
         .set(updateData)
         .where(eq(documentCollections.id, collectionId))
         .returning();
-      
+
       console.log(`Updated collection ${collectionId}`);
       return formatCollectionResponse(result[0]);
-      
     } catch (error) {
-      console.error('Error updating collection:', error);
-      throw new Error(`Failed to update collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error updating collection:", error);
+      throw new Error(
+        `Failed to update collection: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
 
 export const deleteCollection = api(
   { expose: true, method: "DELETE", path: "/collections/:collectionId" },
-  async ({ collectionId, userId }: { collectionId: string; userId: string }): Promise<{ success: boolean }> => {
+  async ({
+    collectionId,
+    userId,
+  }: { collectionId: string; userId: string }): Promise<{ success: boolean }> => {
     try {
       // Verify ownership
       const result = await db
         .delete(documentCollections)
-        .where(and(eq(documentCollections.id, collectionId), eq(documentCollections.userId, userId)))
+        .where(
+          and(eq(documentCollections.id, collectionId), eq(documentCollections.userId, userId))
+        )
         .returning();
-      
+
       if (!result[0]) {
         throw new Error("Collection not found or access denied");
       }
-      
+
       console.log(`Deleted collection ${collectionId}`);
       return { success: true };
-      
     } catch (error) {
-      console.error('Error deleting collection:', error);
-      throw new Error(`Failed to delete collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error deleting collection:", error);
+      throw new Error(
+        `Failed to delete collection: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -412,14 +431,14 @@ export const deleteCollection = api(
 // Collection Document Management
 export const addDocumentToCollection = api(
   { expose: true, method: "POST", path: "/collections/:collectionId/documents/:documentId" },
-  async ({ 
-    collectionId, 
-    documentId, 
-    userId 
-  }: { 
-    collectionId: string; 
-    documentId: string; 
-    userId: string; 
+  async ({
+    collectionId,
+    documentId,
+    userId,
+  }: {
+    collectionId: string;
+    documentId: string;
+    userId: string;
   }): Promise<{ success: boolean }> => {
     try {
       // Verify collection access
@@ -427,30 +446,28 @@ export const addDocumentToCollection = api(
       if (!collection) {
         throw new Error("Collection not found or access denied");
       }
-      
+
       // Verify document ownership
       const documentResult = await db
         .select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.userId, userId)))
         .limit(1);
-      
+
       if (!documentResult[0]) {
         throw new Error("Document not found or access denied");
       }
-      
+
       const relationId = `cd_${nanoid()}`;
-      
+
       // Add document to collection (will fail if already exists due to unique constraint)
-      await db
-        .insert(collectionDocuments)
-        .values({
-          id: relationId,
-          collectionId,
-          documentId,
-          addedBy: userId,
-        });
-      
+      await db.insert(collectionDocuments).values({
+        id: relationId,
+        collectionId,
+        documentId,
+        addedBy: userId,
+      });
+
       // Update document count
       await db
         .update(documentCollections)
@@ -459,49 +476,54 @@ export const addDocumentToCollection = api(
           updatedAt: new Date(),
         })
         .where(eq(documentCollections.id, collectionId));
-      
+
       console.log(`Added document ${documentId} to collection ${collectionId}`);
       return { success: true };
-      
     } catch (error) {
-      console.error('Error adding document to collection:', error);
-      throw new Error(`Failed to add document to collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error adding document to collection:", error);
+      throw new Error(
+        `Failed to add document to collection: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
 
 export const removeDocumentFromCollection = api(
   { expose: true, method: "DELETE", path: "/collections/:collectionId/documents/:documentId" },
-  async ({ 
-    collectionId, 
-    documentId, 
-    userId 
-  }: { 
-    collectionId: string; 
-    documentId: string; 
-    userId: string; 
+  async ({
+    collectionId,
+    documentId,
+    userId,
+  }: {
+    collectionId: string;
+    documentId: string;
+    userId: string;
   }): Promise<{ success: boolean }> => {
     try {
       // Verify collection ownership
       const collection = await db
         .select()
         .from(documentCollections)
-        .where(and(eq(documentCollections.id, collectionId), eq(documentCollections.userId, userId)))
+        .where(
+          and(eq(documentCollections.id, collectionId), eq(documentCollections.userId, userId))
+        )
         .limit(1);
-      
+
       if (!collection[0]) {
         throw new Error("Collection not found or access denied");
       }
-      
+
       // Remove document from collection
       const result = await db
         .delete(collectionDocuments)
-        .where(and(
-          eq(collectionDocuments.collectionId, collectionId),
-          eq(collectionDocuments.documentId, documentId)
-        ))
+        .where(
+          and(
+            eq(collectionDocuments.collectionId, collectionId),
+            eq(collectionDocuments.documentId, documentId)
+          )
+        )
         .returning();
-      
+
       if (result[0]) {
         // Update document count
         await db
@@ -511,15 +533,16 @@ export const removeDocumentFromCollection = api(
             updatedAt: new Date(),
           })
           .where(eq(documentCollections.id, collectionId));
-        
+
         console.log(`Removed document ${documentId} from collection ${collectionId}`);
       }
-      
+
       return { success: true };
-      
     } catch (error) {
-      console.error('Error removing document from collection:', error);
-      throw new Error(`Failed to remove document from collection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error removing document from collection:", error);
+      throw new Error(
+        `Failed to remove document from collection: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -559,17 +582,17 @@ export const getCollectionDocuments = api(
       if (!collection) {
         throw new Error("Collection not found or access denied");
       }
-      
+
       const offset = (page - 1) * limit;
-      
+
       // Get total count
       const totalResult = await db
         .select({ count: count() })
         .from(collectionDocuments)
         .where(eq(collectionDocuments.collectionId, collectionId));
-      
+
       const total = totalResult[0].count;
-      
+
       // Get documents with collection relationship info
       const results = await db
         .select({
@@ -589,12 +612,12 @@ export const getCollectionDocuments = api(
         .orderBy(desc(collectionDocuments.addedAt))
         .limit(limit + 1)
         .offset(offset);
-      
+
       const hasMore = results.length > limit;
       const documentsData = hasMore ? results.slice(0, -1) : results;
-      
+
       return {
-        documents: documentsData.map(doc => ({
+        documents: documentsData.map((doc) => ({
           id: doc.id,
           filename: doc.filename,
           originalName: doc.originalName,
@@ -610,10 +633,11 @@ export const getCollectionDocuments = api(
         limit,
         hasMore,
       };
-      
     } catch (error) {
-      console.error('Error retrieving collection documents:', error);
-      throw new Error(`Failed to retrieve collection documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving collection documents:", error);
+      throw new Error(
+        `Failed to retrieve collection documents: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -640,21 +664,22 @@ export const getPopularTags = api(
         .groupBy(documentTags.tag)
         .orderBy(desc(count()), desc(sql`MAX(${documentTags.createdAt})`))
         .limit(limit);
-      
-      const tags = results.map(result => ({
+
+      const tags = results.map((result) => ({
         tag: result.tag,
         count: Number(result.count),
         lastUsed: result.lastUsed,
       }));
-      
+
       return {
         tags,
         total: tags.length,
       };
-      
     } catch (error) {
-      console.error('Error retrieving popular tags:', error);
-      throw new Error(`Failed to retrieve popular tags: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving popular tags:", error);
+      throw new Error(
+        `Failed to retrieve popular tags: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -677,33 +702,32 @@ export const addTagToDocument = api(
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.userId, userId)))
         .limit(1);
-      
+
       if (!documentResult[0]) {
         throw new Error("Document not found or access denied");
       }
-      
+
       const tagId = `tag_${nanoid()}`;
-      
+
       // Add tag (will fail if already exists due to unique constraint)
-      await db
-        .insert(documentTags)
-        .values({
-          id: tagId,
-          documentId,
-          tag: tag.toLowerCase().trim(),
-          userId,
-        });
-      
+      await db.insert(documentTags).values({
+        id: tagId,
+        documentId,
+        tag: tag.toLowerCase().trim(),
+        userId,
+      });
+
       console.log(`Added tag '${tag}' to document ${documentId}`);
       return { success: true };
-      
     } catch (error) {
-      console.error('Error adding tag to document:', error);
+      console.error("Error adding tag to document:", error);
       // Don't fail if tag already exists
-      if (error instanceof Error && error.message.includes('unique')) {
+      if (error instanceof Error && error.message.includes("unique")) {
         return { success: true };
       }
-      throw new Error(`Failed to add tag to document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to add tag to document: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -722,18 +746,21 @@ export const removeTagFromDocument = api(
     try {
       await db
         .delete(documentTags)
-        .where(and(
-          eq(documentTags.documentId, documentId),
-          eq(documentTags.tag, tag.toLowerCase().trim()),
-          eq(documentTags.userId, userId)
-        ));
-      
+        .where(
+          and(
+            eq(documentTags.documentId, documentId),
+            eq(documentTags.tag, tag.toLowerCase().trim()),
+            eq(documentTags.userId, userId)
+          )
+        );
+
       console.log(`Removed tag '${tag}' from document ${documentId}`);
       return { success: true };
-      
     } catch (error) {
-      console.error('Error removing tag from document:', error);
-      throw new Error(`Failed to remove tag from document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error removing tag from document:", error);
+      throw new Error(
+        `Failed to remove tag from document: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -769,15 +796,17 @@ export const getDocumentsByTag = api(
   }> => {
     try {
       const offset = (page - 1) * limit;
-      
+
       // Get total count
       const totalResult = await db
         .select({ count: count() })
         .from(documentTags)
-        .where(and(eq(documentTags.tag, tag.toLowerCase().trim()), eq(documentTags.userId, userId)));
-      
+        .where(
+          and(eq(documentTags.tag, tag.toLowerCase().trim()), eq(documentTags.userId, userId))
+        );
+
       const total = totalResult[0].count;
-      
+
       // Get documents with tag relationship info
       const results = await db
         .select({
@@ -797,12 +826,12 @@ export const getDocumentsByTag = api(
         .orderBy(desc(documentTags.createdAt))
         .limit(limit + 1)
         .offset(offset);
-      
+
       const hasMore = results.length > limit;
       const documentsData = hasMore ? results.slice(0, -1) : results;
-      
+
       return {
-        documents: documentsData.map(doc => ({
+        documents: documentsData.map((doc) => ({
           id: doc.id,
           filename: doc.filename,
           originalName: doc.originalName,
@@ -818,10 +847,11 @@ export const getDocumentsByTag = api(
         limit,
         hasMore,
       };
-      
     } catch (error) {
-      console.error('Error retrieving documents by tag:', error);
-      throw new Error(`Failed to retrieve documents by tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving documents by tag:", error);
+      throw new Error(
+        `Failed to retrieve documents by tag: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -838,7 +868,7 @@ export const createSavedFilter = api(
   }): Promise<SavedFilterResponse> => {
     try {
       const validated = SavedFilterCreateSchema.parse(request);
-      
+
       const filterId = `filter_${nanoid()}`;
       const filterData: NewSavedFilter = {
         id: filterId,
@@ -849,12 +879,9 @@ export const createSavedFilter = api(
         isPublic: validated.isPublic,
         useCount: 0,
       };
-      
-      const result = await db
-        .insert(savedFilters)
-        .values(filterData)
-        .returning();
-      
+
+      const result = await db.insert(savedFilters).values(filterData).returning();
+
       console.log(`Created saved filter ${filterId} for user ${validated.userId}`);
       return {
         id: result[0].id,
@@ -867,10 +894,11 @@ export const createSavedFilter = api(
         createdAt: result[0].createdAt,
         updatedAt: result[0].updatedAt,
       };
-      
     } catch (error) {
-      console.error('Error creating saved filter:', error);
-      throw new Error(`Failed to create saved filter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error creating saved filter:", error);
+      throw new Error(
+        `Failed to create saved filter: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -882,15 +910,10 @@ export const getSavedFilters = api(
       const results = await db
         .select()
         .from(savedFilters)
-        .where(
-          or(
-            eq(savedFilters.userId, userId),
-            eq(savedFilters.isPublic, true)
-          )
-        )
+        .where(or(eq(savedFilters.userId, userId), eq(savedFilters.isPublic, true)))
         .orderBy(desc(savedFilters.updatedAt));
-      
-      const filters = results.map(result => ({
+
+      const filters = results.map((result) => ({
         id: result.id,
         userId: result.userId,
         name: result.name,
@@ -901,15 +924,16 @@ export const getSavedFilters = api(
         createdAt: result.createdAt,
         updatedAt: result.updatedAt,
       }));
-      
+
       return {
         filters,
         total: filters.length,
       };
-      
     } catch (error) {
-      console.error('Error retrieving saved filters:', error);
-      throw new Error(`Failed to retrieve saved filters: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error retrieving saved filters:", error);
+      throw new Error(
+        `Failed to retrieve saved filters: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -936,20 +960,17 @@ export const applySavedFilter = api(
         .where(
           and(
             eq(savedFilters.id, filterId),
-            or(
-              eq(savedFilters.userId, userId),
-              eq(savedFilters.isPublic, true)
-            )
+            or(eq(savedFilters.userId, userId), eq(savedFilters.isPublic, true))
           )
         )
         .limit(1);
-      
+
       if (!filterResult[0]) {
         throw new Error("Saved filter not found or access denied");
       }
-      
+
       const filter = filterResult[0];
-      
+
       // Increment use count
       await db
         .update(savedFilters)
@@ -958,23 +979,24 @@ export const applySavedFilter = api(
           updatedAt: new Date(),
         })
         .where(eq(savedFilters.id, filterId));
-      
+
       // Combine filters
       const appliedFilters = {
         ...filter.filters,
         ...additionalFilters,
       };
-      
+
       console.log(`Applied saved filter ${filterId} for user ${userId}`);
-      
+
       return {
         appliedFilters,
         message: `Applied filter '${filter.name}' with ${Object.keys(appliedFilters).length} criteria`,
       };
-      
     } catch (error) {
-      console.error('Error applying saved filter:', error);
-      throw new Error(`Failed to apply saved filter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error applying saved filter:", error);
+      throw new Error(
+        `Failed to apply saved filter: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -985,7 +1007,7 @@ export const getOrganizationRecommendations = api(
   async ({ userId }: { userId: string }): Promise<OrganizationRecommendationsResponse> => {
     try {
       const recommendations: OrganizationRecommendation[] = [];
-      
+
       // Get user's documents for analysis
       const userDocuments = await db
         .select({
@@ -997,14 +1019,14 @@ export const getOrganizationRecommendations = api(
         .from(documents)
         .where(eq(documents.userId, userId))
         .limit(100); // Analyze up to 100 recent documents
-      
+
       // Group documents by patterns
       const projectGroups: Record<string, typeof userDocuments> = {};
       const typeGroups: Record<string, typeof userDocuments> = {};
-      
-      userDocuments.forEach(doc => {
+
+      for (const doc of userDocuments) {
         const metadata = doc.metadata as Record<string, any>;
-        
+
         // Group by project
         if (metadata.project) {
           if (!projectGroups[metadata.project]) {
@@ -1012,14 +1034,14 @@ export const getOrganizationRecommendations = api(
           }
           projectGroups[metadata.project].push(doc);
         }
-        
+
         // Group by content type
         if (!typeGroups[doc.contentType]) {
           typeGroups[doc.contentType] = [];
         }
         typeGroups[doc.contentType].push(doc);
-      });
-      
+      }
+
       // Recommend collections for projects with multiple documents
       Object.entries(projectGroups).forEach(([project, docs]) => {
         if (docs.length >= 3) {
@@ -1027,43 +1049,48 @@ export const getOrganizationRecommendations = api(
             type: "create_collection",
             reason: `Found ${docs.length} documents for project "${project}"`,
             suggestedName: project,
-            documentIds: docs.map(d => d.id),
-            confidence: Math.min(0.9, 0.5 + (docs.length * 0.1)),
+            documentIds: docs.map((d) => d.id),
+            confidence: Math.min(0.9, 0.5 + docs.length * 0.1),
           });
         }
       });
-      
+
       // Recommend collections for content types with many documents
       Object.entries(typeGroups).forEach(([contentType, docs]) => {
         if (docs.length >= 10) {
-          const typeName = contentType === "application/pdf" ? "PDF Documents" :
-                          contentType === "text/plain" ? "Text Files" :
-                          contentType.includes("word") ? "Word Documents" :
-                          "Documents";
-          
+          const typeName =
+            contentType === "application/pdf"
+              ? "PDF Documents"
+              : contentType === "text/plain"
+                ? "Text Files"
+                : contentType.includes("word")
+                  ? "Word Documents"
+                  : "Documents";
+
           recommendations.push({
             type: "create_collection",
             reason: `Found ${docs.length} ${typeName.toLowerCase()}`,
             suggestedName: typeName,
-            documentIds: docs.map(d => d.id),
-            confidence: Math.min(0.8, 0.3 + (docs.length * 0.05)),
+            documentIds: docs.map((d) => d.id),
+            confidence: Math.min(0.8, 0.3 + docs.length * 0.05),
           });
         }
       });
-      
+
       // Sort by confidence and limit results
       const sortedRecommendations = recommendations
         .sort((a, b) => b.confidence - a.confidence)
         .slice(0, 5);
-      
+
       return {
         recommendations: sortedRecommendations,
         total: sortedRecommendations.length,
       };
-      
     } catch (error) {
-      console.error('Error generating organization recommendations:', error);
-      throw new Error(`Failed to generate recommendations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error generating organization recommendations:", error);
+      throw new Error(
+        `Failed to generate recommendations: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );

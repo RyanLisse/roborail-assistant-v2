@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { nanoid } from "nanoid";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 
 // Mock data structures for testing
 const mockCollections = new Map();
@@ -67,18 +67,20 @@ const mockCollectionOperations = {
   },
 
   async findByUserId(userId: string, filters: any = {}) {
-    const userCollections = Array.from(mockCollections.values())
-      .filter((collection: any) => collection.userId === userId || collection.isPublic);
-    
+    const userCollections = Array.from(mockCollections.values()).filter(
+      (collection: any) => collection.userId === userId || collection.isPublic
+    );
+
     let filtered = userCollections;
     if (filters.search) {
-      filtered = filtered.filter((collection: any) => 
-        collection.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        collection.description?.toLowerCase().includes(filters.search.toLowerCase())
+      filtered = filtered.filter(
+        (collection: any) =>
+          collection.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+          collection.description?.toLowerCase().includes(filters.search.toLowerCase())
       );
     }
     if (filters.tags && filters.tags.length > 0) {
-      filtered = filtered.filter((collection: any) => 
+      filtered = filtered.filter((collection: any) =>
         filters.tags.some((tag: string) => collection.tags?.includes(tag))
       );
     }
@@ -102,7 +104,7 @@ const mockCollectionOperations = {
   async update(id: string, updates: any) {
     const collection = mockCollections.get(id);
     if (!collection) return null;
-    
+
     const updatedCollection = { ...collection, ...updates, updatedAt: new Date() };
     mockCollections.set(id, updatedCollection);
     return updatedCollection;
@@ -111,11 +113,11 @@ const mockCollectionOperations = {
   async delete(id: string) {
     const collection = mockCollections.get(id);
     if (!collection) return false;
-    
+
     mockCollections.delete(id);
     // Remove all document associations
-    Array.from(mockCollectionDocuments.keys()).forEach(key => {
-      const [collectionId] = key.split('::');
+    Array.from(mockCollectionDocuments.keys()).forEach((key) => {
+      const [collectionId] = key.split("::");
       if (collectionId === id) {
         mockCollectionDocuments.delete(key);
       }
@@ -130,14 +132,14 @@ const mockCollectionOperations = {
       documentId,
       addedAt: new Date(),
     });
-    
+
     // Update document count
     const collection = mockCollections.get(collectionId);
     if (collection) {
       collection.documentCount = (collection.documentCount || 0) + 1;
       collection.updatedAt = new Date();
     }
-    
+
     return true;
   },
 
@@ -145,7 +147,7 @@ const mockCollectionOperations = {
     const key = `${collectionId}::${documentId}`;
     const existed = mockCollectionDocuments.has(key);
     mockCollectionDocuments.delete(key);
-    
+
     if (existed) {
       // Update document count
       const collection = mockCollections.get(collectionId);
@@ -154,17 +156,19 @@ const mockCollectionOperations = {
         collection.updatedAt = new Date();
       }
     }
-    
+
     return existed;
   },
 
   async getDocuments(collectionId: string, filters: any = {}) {
-    const collectionDocs = Array.from(mockCollectionDocuments.values())
-      .filter((cd: any) => cd.collectionId === collectionId);
-    
+    const collectionDocs = Array.from(mockCollectionDocuments.values()).filter(
+      (cd: any) => cd.collectionId === collectionId
+    );
+
     const documentIds = collectionDocs.map((cd: any) => cd.documentId);
-    const documents = Array.from(mockDocuments.values())
-      .filter((doc: any) => documentIds.includes(doc.id));
+    const documents = Array.from(mockDocuments.values()).filter((doc: any) =>
+      documentIds.includes(doc.id)
+    );
 
     // Apply pagination
     const limit = filters.limit || 20;
@@ -181,10 +185,9 @@ const mockCollectionOperations = {
 
 // Mock tag operations
 const mockTagOperations = {
-  async getPopularTags(userId: string, limit: number = 20) {
-    const userDocs = Array.from(mockDocuments.values())
-      .filter((doc: any) => doc.userId === userId);
-    
+  async getPopularTags(userId: string, limit = 20) {
+    const userDocs = Array.from(mockDocuments.values()).filter((doc: any) => doc.userId === userId);
+
     const tagCounts: Record<string, number> = {};
     userDocs.forEach((doc: any) => {
       if (doc.metadata.tags) {
@@ -222,12 +225,14 @@ const mockTagOperations = {
   },
 
   async findDocumentsByTag(tag: string, userId: string, filters: any = {}) {
-    const taggedDocuments = Array.from(mockDocumentTags.values())
-      .filter((dt: any) => dt.tag === tag);
-    
+    const taggedDocuments = Array.from(mockDocumentTags.values()).filter(
+      (dt: any) => dt.tag === tag
+    );
+
     const documentIds = taggedDocuments.map((dt: any) => dt.documentId);
-    const documents = Array.from(mockDocuments.values())
-      .filter((doc: any) => doc.userId === userId && documentIds.includes(doc.id));
+    const documents = Array.from(mockDocuments.values()).filter(
+      (doc: any) => doc.userId === userId && documentIds.includes(doc.id)
+    );
 
     // Apply pagination
     const limit = filters.limit || 20;
@@ -263,7 +268,7 @@ const mockSavedFilterOperations = {
   async update(id: string, updates: any) {
     const filter = mockSavedFilters.get(id);
     if (!filter) return null;
-    
+
     const updatedFilter = { ...filter, ...updates, updatedAt: new Date() };
     mockSavedFilters.set(id, updatedFilter);
     return updatedFilter;
@@ -278,10 +283,11 @@ const mockSavedFilterOperations = {
     if (!filter) return null;
 
     const combinedFilters = { ...filter.filters, ...additionalFilters };
-    
+
     // Mock applying filters to documents
-    let documents = Array.from(mockDocuments.values())
-      .filter((doc: any) => doc.userId === filter.userId);
+    let documents = Array.from(mockDocuments.values()).filter(
+      (doc: any) => doc.userId === filter.userId
+    );
 
     if (combinedFilters.contentType) {
       documents = documents.filter((doc: any) => doc.contentType === combinedFilters.contentType);
@@ -290,7 +296,9 @@ const mockSavedFilterOperations = {
       documents = documents.filter((doc: any) => doc.status === combinedFilters.status);
     }
     if (combinedFilters.department) {
-      documents = documents.filter((doc: any) => doc.metadata.department === combinedFilters.department);
+      documents = documents.filter(
+        (doc: any) => doc.metadata.department === combinedFilters.department
+      );
     }
 
     return {
@@ -314,9 +322,9 @@ describe("Document Organization and Filtering", () => {
   describe("Collection Management", () => {
     test("should create a new collection", async () => {
       const collectionData = createMockCollection();
-      
+
       const result = await mockCollectionOperations.create(collectionData);
-      
+
       expect(result).toMatchObject(collectionData);
       expect(result.createdAt).toBeInstanceOf(Date);
       expect(result.updatedAt).toBeInstanceOf(Date);
@@ -336,7 +344,7 @@ describe("Document Organization and Filtering", () => {
       }
 
       const result = await mockCollectionOperations.findByUserId(userId);
-      
+
       expect(result.collections).toHaveLength(3); // 2 own + 1 public
       expect(result.total).toBe(3);
     });
@@ -344,8 +352,16 @@ describe("Document Organization and Filtering", () => {
     test("should search collections by name and description", async () => {
       const userId = "test-user-123";
       const collections = [
-        createMockCollection({ userId, name: "Project Alpha", description: "Machine learning project" }),
-        createMockCollection({ userId, name: "Personal Notes", description: "Personal documentation" }),
+        createMockCollection({
+          userId,
+          name: "Project Alpha",
+          description: "Machine learning project",
+        }),
+        createMockCollection({
+          userId,
+          name: "Personal Notes",
+          description: "Personal documentation",
+        }),
         createMockCollection({ userId, name: "Archive", description: "Old project files" }),
       ];
 
@@ -354,7 +370,7 @@ describe("Document Organization and Filtering", () => {
       }
 
       const result = await mockCollectionOperations.findByUserId(userId, { search: "project" });
-      
+
       expect(result.collections).toHaveLength(2);
       expect(result.collections.map((c: any) => c.name)).toContain("Project Alpha");
       expect(result.collections.map((c: any) => c.name)).toContain("Archive");
@@ -363,7 +379,11 @@ describe("Document Organization and Filtering", () => {
     test("should filter collections by tags", async () => {
       const userId = "test-user-123";
       const collections = [
-        createMockCollection({ userId, name: "ML Research", tags: ["machine-learning", "research"] }),
+        createMockCollection({
+          userId,
+          name: "ML Research",
+          tags: ["machine-learning", "research"],
+        }),
         createMockCollection({ userId, name: "Web Development", tags: ["web", "development"] }),
         createMockCollection({ userId, name: "Data Science", tags: ["data-science", "research"] }),
       ];
@@ -373,7 +393,7 @@ describe("Document Organization and Filtering", () => {
       }
 
       const result = await mockCollectionOperations.findByUserId(userId, { tags: ["research"] });
-      
+
       expect(result.collections).toHaveLength(2);
       expect(result.collections.every((c: any) => c.tags.includes("research"))).toBe(true);
     });
@@ -381,16 +401,16 @@ describe("Document Organization and Filtering", () => {
     test("should update collection metadata", async () => {
       const collectionData = createMockCollection();
       await mockCollectionOperations.create(collectionData);
-      
+
       const updates = {
         name: "Updated Collection Name",
         description: "Updated description",
         color: "#FF5722",
         tags: ["updated", "test"],
       };
-      
+
       const result = await mockCollectionOperations.update(collectionData.id, updates);
-      
+
       expect(result.name).toBe("Updated Collection Name");
       expect(result.description).toBe("Updated description");
       expect(result.color).toBe("#FF5722");
@@ -401,19 +421,20 @@ describe("Document Organization and Filtering", () => {
     test("should delete collection and remove document associations", async () => {
       const collectionData = createMockCollection();
       await mockCollectionOperations.create(collectionData);
-      
+
       // Add some documents to the collection
       await mockCollectionOperations.addDocument(collectionData.id, "doc1");
       await mockCollectionOperations.addDocument(collectionData.id, "doc2");
-      
+
       const result = await mockCollectionOperations.delete(collectionData.id);
-      
+
       expect(result).toBe(true);
       expect(mockCollections.has(collectionData.id)).toBe(false);
-      
+
       // Verify document associations are removed
-      const remainingAssociations = Array.from(mockCollectionDocuments.values())
-        .filter((cd: any) => cd.collectionId === collectionData.id);
+      const remainingAssociations = Array.from(mockCollectionDocuments.values()).filter(
+        (cd: any) => cd.collectionId === collectionData.id
+      );
       expect(remainingAssociations).toHaveLength(0);
     });
   });
@@ -425,13 +446,13 @@ describe("Document Organization and Filtering", () => {
     beforeEach(async () => {
       testCollection = createMockCollection();
       await mockCollectionOperations.create(testCollection);
-      
+
       testDocuments = [
         createMockDocument({ id: "doc1", filename: "document1.pdf" }),
         createMockDocument({ id: "doc2", filename: "document2.pdf" }),
         createMockDocument({ id: "doc3", filename: "document3.pdf" }),
       ];
-      
+
       for (const doc of testDocuments) {
         mockDocuments.set(doc.id, doc);
       }
@@ -440,10 +461,10 @@ describe("Document Organization and Filtering", () => {
     test("should add documents to collection", async () => {
       const result1 = await mockCollectionOperations.addDocument(testCollection.id, "doc1");
       const result2 = await mockCollectionOperations.addDocument(testCollection.id, "doc2");
-      
+
       expect(result1).toBe(true);
       expect(result2).toBe(true);
-      
+
       const updatedCollection = await mockCollectionOperations.findById(testCollection.id);
       expect(updatedCollection.documentCount).toBe(2);
     });
@@ -451,11 +472,11 @@ describe("Document Organization and Filtering", () => {
     test("should remove documents from collection", async () => {
       await mockCollectionOperations.addDocument(testCollection.id, "doc1");
       await mockCollectionOperations.addDocument(testCollection.id, "doc2");
-      
+
       const result = await mockCollectionOperations.removeDocument(testCollection.id, "doc1");
-      
+
       expect(result).toBe(true);
-      
+
       const updatedCollection = await mockCollectionOperations.findById(testCollection.id);
       expect(updatedCollection.documentCount).toBe(1);
     });
@@ -464,12 +485,12 @@ describe("Document Organization and Filtering", () => {
       await mockCollectionOperations.addDocument(testCollection.id, "doc1");
       await mockCollectionOperations.addDocument(testCollection.id, "doc2");
       await mockCollectionOperations.addDocument(testCollection.id, "doc3");
-      
-      const result = await mockCollectionOperations.getDocuments(testCollection.id, { 
-        page: 1, 
-        limit: 2 
+
+      const result = await mockCollectionOperations.getDocuments(testCollection.id, {
+        page: 1,
+        limit: 2,
       });
-      
+
       expect(result.documents).toHaveLength(2);
       expect(result.total).toBe(3);
       expect(result.hasMore).toBe(true);
@@ -478,7 +499,7 @@ describe("Document Organization and Filtering", () => {
     test("should handle duplicate document additions gracefully", async () => {
       await mockCollectionOperations.addDocument(testCollection.id, "doc1");
       await mockCollectionOperations.addDocument(testCollection.id, "doc1"); // Duplicate
-      
+
       const updatedCollection = await mockCollectionOperations.findById(testCollection.id);
       expect(updatedCollection.documentCount).toBe(2); // Mock doesn't prevent duplicates
     });
@@ -489,23 +510,23 @@ describe("Document Organization and Filtering", () => {
 
     beforeEach(async () => {
       testDocuments = [
-        createMockDocument({ 
-          id: "doc1", 
+        createMockDocument({
+          id: "doc1",
           userId: "user1",
-          metadata: { tags: ["machine-learning", "python", "research"] }
+          metadata: { tags: ["machine-learning", "python", "research"] },
         }),
-        createMockDocument({ 
-          id: "doc2", 
+        createMockDocument({
+          id: "doc2",
           userId: "user1",
-          metadata: { tags: ["web-development", "javascript", "react"] }
+          metadata: { tags: ["web-development", "javascript", "react"] },
         }),
-        createMockDocument({ 
-          id: "doc3", 
+        createMockDocument({
+          id: "doc3",
           userId: "user1",
-          metadata: { tags: ["machine-learning", "tensorflow", "research"] }
+          metadata: { tags: ["machine-learning", "tensorflow", "research"] },
         }),
       ];
-      
+
       for (const doc of testDocuments) {
         mockDocuments.set(doc.id, doc);
         // Add tags to mock system
@@ -519,28 +540,28 @@ describe("Document Organization and Filtering", () => {
 
     test("should get popular tags for user", async () => {
       const result = await mockTagOperations.getPopularTags("user1");
-      
+
       expect(result).toHaveLength(6);
-      expect(result.find(r => r.tag === "machine-learning")?.count).toBe(2);
-      expect(result.find(r => r.tag === "research")?.count).toBe(2);
-      expect(result.find(r => r.tag === "python")?.count).toBe(1);
+      expect(result.find((r) => r.tag === "machine-learning")?.count).toBe(2);
+      expect(result.find((r) => r.tag === "research")?.count).toBe(2);
+      expect(result.find((r) => r.tag === "python")?.count).toBe(1);
     });
 
     test("should add and remove tags from documents", async () => {
       await mockTagOperations.addTag("doc1", "new-tag");
-      
+
       let tags = await mockTagOperations.getDocumentTags("doc1");
       expect(tags).toContain("new-tag");
-      
+
       await mockTagOperations.removeTag("doc1", "new-tag");
-      
+
       tags = await mockTagOperations.getDocumentTags("doc1");
       expect(tags).not.toContain("new-tag");
     });
 
     test("should find documents by tag", async () => {
       const result = await mockTagOperations.findDocumentsByTag("machine-learning", "user1");
-      
+
       expect(result.documents).toHaveLength(2);
       expect(result.documents.map((d: any) => d.id)).toEqual(["doc1", "doc3"]);
       expect(result.total).toBe(2);
@@ -551,7 +572,7 @@ describe("Document Organization and Filtering", () => {
         page: 1,
         limit: 1,
       });
-      
+
       expect(result.documents).toHaveLength(1);
       expect(result.total).toBe(2);
       expect(result.hasMore).toBe(true);
@@ -561,9 +582,9 @@ describe("Document Organization and Filtering", () => {
   describe("Saved Filters", () => {
     test("should create a saved filter", async () => {
       const filterData = createMockSavedFilter();
-      
+
       const result = await mockSavedFilterOperations.create(filterData);
-      
+
       expect(result).toMatchObject(filterData);
       expect(result.createdAt).toBeInstanceOf(Date);
       expect(result.updatedAt).toBeInstanceOf(Date);
@@ -583,14 +604,14 @@ describe("Document Organization and Filtering", () => {
       }
 
       const result = await mockSavedFilterOperations.findByUserId(userId);
-      
+
       expect(result).toHaveLength(3); // 2 own + 1 public
     });
 
     test("should update saved filter", async () => {
       const filterData = createMockSavedFilter();
       await mockSavedFilterOperations.create(filterData);
-      
+
       const updates = {
         name: "Updated Filter Name",
         description: "Updated description",
@@ -599,9 +620,9 @@ describe("Document Organization and Filtering", () => {
           status: "processed",
         },
       };
-      
+
       const result = await mockSavedFilterOperations.update(filterData.id, updates);
-      
+
       expect(result.name).toBe("Updated Filter Name");
       expect(result.description).toBe("Updated description");
       expect(result.filters.contentType).toBe("text/plain");
@@ -618,20 +639,20 @@ describe("Document Organization and Filtering", () => {
         },
       });
       await mockSavedFilterOperations.create(filterData);
-      
+
       // Create test documents
       const testDocs = [
         createMockDocument({ userId, contentType: "application/pdf", status: "processed" }),
         createMockDocument({ userId, contentType: "text/plain", status: "processed" }),
         createMockDocument({ userId, contentType: "application/pdf", status: "processing" }),
       ];
-      
+
       for (const doc of testDocs) {
         mockDocuments.set(doc.id, doc);
       }
-      
+
       const result = await mockSavedFilterOperations.applyFilter(filterData.id);
-      
+
       expect(result.documents).toHaveLength(1);
       expect(result.documents[0].contentType).toBe("application/pdf");
       expect(result.documents[0].status).toBe("processed");
@@ -647,12 +668,12 @@ describe("Document Organization and Filtering", () => {
         },
       });
       await mockSavedFilterOperations.create(filterData);
-      
+
       const result = await mockSavedFilterOperations.applyFilter(filterData.id, {
         status: "processed",
         department: "Engineering",
       });
-      
+
       expect(result.appliedFilters.contentType).toBe("application/pdf");
       expect(result.appliedFilters.status).toBe("processed");
       expect(result.appliedFilters.department).toBe("Engineering");
@@ -662,30 +683,30 @@ describe("Document Organization and Filtering", () => {
   describe("Advanced Organization Features", () => {
     test("should handle complex collection hierarchies", async () => {
       const userId = "test-user-123";
-      const parentCollection = createMockCollection({ 
-        userId, 
+      const parentCollection = createMockCollection({
+        userId,
         name: "Parent Project",
-        metadata: { type: "parent" }
+        metadata: { type: "parent" },
       });
-      
+
       const childCollections = [
-        createMockCollection({ 
-          userId, 
+        createMockCollection({
+          userId,
           name: "Sub-project A",
-          metadata: { type: "child", parentId: parentCollection.id }
+          metadata: { type: "child", parentId: parentCollection.id },
         }),
-        createMockCollection({ 
-          userId, 
+        createMockCollection({
+          userId,
           name: "Sub-project B",
-          metadata: { type: "child", parentId: parentCollection.id }
+          metadata: { type: "child", parentId: parentCollection.id },
         }),
       ];
-      
+
       await mockCollectionOperations.create(parentCollection);
       for (const child of childCollections) {
         await mockCollectionOperations.create(child);
       }
-      
+
       const result = await mockCollectionOperations.findByUserId(userId);
       expect(result.collections).toHaveLength(3);
     });
@@ -699,7 +720,7 @@ describe("Document Organization and Filtering", () => {
           department: "AI Research",
         },
       });
-      
+
       // Mock smart tagging logic
       const suggestedTags = [];
       if (testDoc.filename.includes("machine-learning")) {
@@ -714,7 +735,7 @@ describe("Document Organization and Filtering", () => {
       if (testDoc.metadata.department === "AI Research") {
         suggestedTags.push("ai-research");
       }
-      
+
       expect(suggestedTags).toContain("machine-learning");
       expect(suggestedTags).toContain("deep-learning");
       expect(suggestedTags).toContain("computer-vision");
@@ -724,33 +745,33 @@ describe("Document Organization and Filtering", () => {
 
     test("should provide document organization recommendations", async () => {
       const userId = "test-user-123";
-      
+
       // Create documents with similar patterns
       const testDocs = [
-        createMockDocument({ 
-          userId, 
+        createMockDocument({
+          userId,
           filename: "project-a-spec.pdf",
-          metadata: { department: "Engineering", project: "Project A" }
+          metadata: { department: "Engineering", project: "Project A" },
         }),
-        createMockDocument({ 
-          userId, 
+        createMockDocument({
+          userId,
           filename: "project-a-design.pdf",
-          metadata: { department: "Engineering", project: "Project A" }
+          metadata: { department: "Engineering", project: "Project A" },
         }),
-        createMockDocument({ 
-          userId, 
+        createMockDocument({
+          userId,
           filename: "project-b-spec.pdf",
-          metadata: { department: "Engineering", project: "Project B" }
+          metadata: { department: "Engineering", project: "Project B" },
         }),
       ];
-      
+
       for (const doc of testDocs) {
         mockDocuments.set(doc.id, doc);
       }
-      
+
       // Mock recommendation logic
       const recommendations = [];
-      
+
       // Group by project
       const projectGroups: Record<string, any[]> = {};
       Array.from(mockDocuments.values())
@@ -764,7 +785,7 @@ describe("Document Organization and Filtering", () => {
             projectGroups[project].push(doc);
           }
         });
-      
+
       // Suggest collections for projects with multiple documents
       Object.entries(projectGroups).forEach(([project, docs]) => {
         if (docs.length >= 2) {
@@ -772,11 +793,11 @@ describe("Document Organization and Filtering", () => {
             type: "create_collection",
             reason: `Multiple documents found for ${project}`,
             suggestedName: project,
-            documentIds: docs.map(d => d.id),
+            documentIds: docs.map((d) => d.id),
           });
         }
       });
-      
+
       expect(recommendations).toHaveLength(2);
       expect(recommendations[0].suggestedName).toBe("Project A");
       expect(recommendations[0].documentIds).toHaveLength(2);
@@ -789,32 +810,34 @@ describe("Document Organization and Filtering", () => {
     test("should handle large numbers of collections efficiently", async () => {
       const userId = "test-user-123";
       const collectionCount = 100;
-      
+
       const startTime = Date.now();
-      
+
       // Create many collections
-      const createPromises = Array.from({ length: collectionCount }, (_, i) => 
-        mockCollectionOperations.create(createMockCollection({
-          userId,
-          name: `Collection ${i}`,
-          tags: [`tag-${i % 10}`], // 10 different tags
-        }))
+      const createPromises = Array.from({ length: collectionCount }, (_, i) =>
+        mockCollectionOperations.create(
+          createMockCollection({
+            userId,
+            name: `Collection ${i}`,
+            tags: [`tag-${i % 10}`], // 10 different tags
+          })
+        )
       );
-      
+
       await Promise.all(createPromises);
-      
+
       const duration = Date.now() - startTime;
       console.log(`Created ${collectionCount} collections in ${duration}ms`);
-      
+
       // Test filtering performance
       const filterStartTime = Date.now();
-      const result = await mockCollectionOperations.findByUserId(userId, { 
+      const result = await mockCollectionOperations.findByUserId(userId, {
         tags: ["tag-5"],
         page: 1,
         limit: 20,
       });
       const filterDuration = Date.now() - filterStartTime;
-      
+
       console.log(`Filtered collections in ${filterDuration}ms`);
       expect(result.collections).toHaveLength(10); // Should find ~10 collections with tag-5
     });
@@ -822,7 +845,7 @@ describe("Document Organization and Filtering", () => {
     test("should optimize tag queries for large document sets", async () => {
       const userId = "test-user-123";
       const documentCount = 200;
-      
+
       // Create many documents with various tags
       for (let i = 0; i < documentCount; i++) {
         const doc = createMockDocument({
@@ -833,17 +856,17 @@ describe("Document Organization and Filtering", () => {
           },
         });
         mockDocuments.set(doc.id, doc);
-        
+
         // Add tags to system
         for (const tag of doc.metadata.tags) {
           await mockTagOperations.addTag(doc.id, tag);
         }
       }
-      
+
       const startTime = Date.now();
       const popularTags = await mockTagOperations.getPopularTags(userId, 20);
       const duration = Date.now() - startTime;
-      
+
       console.log(`Retrieved popular tags in ${duration}ms`);
       expect(popularTags).toHaveLength(10); // 5 categories + 3 types + 2 priorities
       expect(popularTags[0].count).toBeGreaterThan(popularTags[popularTags.length - 1].count);

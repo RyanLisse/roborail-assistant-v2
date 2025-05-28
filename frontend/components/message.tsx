@@ -19,10 +19,38 @@ import { PreviewAttachment } from "./preview-attachment";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Weather } from "./weather";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
+
+// Define types for citations and sources based on Slice 7-9 & backend schema
+// These might come from a shared types file in a real scenario
+interface CitationSource {
+  id: number | string; // Corresponds to documentChunk.id
+  documentId?: number; // Added from schema.ts CitationData
+  title?: string | null; // Corresponds to documents.title
+  documentSource?: string | null; // Corresponds to documents.source (original filename/URL)
+  snippet?: string; // A snippet of the chunk content
+  score?: number; // Relevance score from reranker/search
+  pageNumber?: number;
+}
+interface CitationData {
+  sourceId: string; // documentChunk.id (or a unique reference to it)
+  documentId: number;
+  documentTitle: string;
+  documentSource: string; // e.g. original filename or URL
+  quote: string; // The specific text snippet from the chunk that supports the claim
+  pageNumber?: number;
+  // confidence?: number; // If reranker provides it (from schema.ts example)
+}
+
+// Augment UIMessage if necessary, or assume citations/sources are in message.data
+interface ExtendedUIMessage extends UIMessage {
+  citations?: CitationData[];
+  sources?: CitationSource[];
+}
 
 const PurePreviewMessage = ({
   chatId,
-  message,
+  message: rawMessage,
   vote,
   isLoading,
   setMessages,
@@ -44,11 +72,11 @@ const PurePreviewMessage = ({
   return (
     <AnimatePresence>
       <motion.div
-        data-testid={`message-${message.role}`}
+        data-testid={`message-${rawMessage.role}`}
         className="w-full mx-auto max-w-3xl px-4 group/message"
         initial={{ y: 5, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        data-role={message.role}
+        data-role={rawMessage.role}
       >
         <div
           className={cn(
@@ -59,7 +87,7 @@ const PurePreviewMessage = ({
             }
           )}
         >
-          {message.role === "assistant" && (
+          {rawMessage.role === "assistant" && (
             <div className="size-8 flex items-center rounded-full justify-center ring-1 shrink-0 ring-border bg-background">
               <div className="translate-y-px">
                 <SparklesIcon size={14} />
@@ -69,20 +97,20 @@ const PurePreviewMessage = ({
 
           <div
             className={cn("flex flex-col gap-4 w-full", {
-              "min-h-96": message.role === "assistant" && requiresScrollPadding,
+              "min-h-96": rawMessage.role === "assistant" && requiresScrollPadding,
             })}
           >
-            {message.experimental_attachments && message.experimental_attachments.length > 0 && (
+            {rawMessage.experimental_attachments && rawMessage.experimental_attachments.length > 0 && (
               <div data-testid={`message-attachments`} className="flex flex-row justify-end gap-2">
-                {message.experimental_attachments.map((attachment) => (
+                {rawMessage.experimental_attachments.map((attachment) => (
                   <PreviewAttachment key={attachment.url} attachment={attachment} />
                 ))}
               </div>
             )}
 
-            {message.parts?.map((part, index) => {
+            {rawMessage.parts?.map((part, index) => {
               const { type } = part;
-              const key = `message-${message.id}-part-${index}`;
+              const key = `message-${rawMessage.id}-part-${index}`;
 
               if (type === "reasoning") {
                 return (
@@ -94,7 +122,7 @@ const PurePreviewMessage = ({
                 if (mode === "view") {
                   return (
                     <div key={key} className="flex flex-row gap-2 items-start">
-                      {message.role === "user" && !isReadonly && (
+                      {rawMessage.role === "user" && !isReadonly && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -116,10 +144,14 @@ const PurePreviewMessage = ({
                         data-testid="message-content"
                         className={cn("flex flex-col gap-4", {
                           "bg-primary text-primary-foreground px-3 py-2 rounded-xl":
-                            message.role === "user",
+                            rawMessage.role === "user",
                         })}
                       >
-                        <Markdown>{sanitizeText(part.text)}</Markdown>
+                        {rawMessage.role === "assistant" ? (
+                          renderAssistantMessageContent(rawMessage as ExtendedUIMessage, part.text)
+                        ) : (
+                          <Markdown>{sanitizeText(part.text)}</Markdown>
+                        )}
                       </div>
                     </div>
                   );
@@ -131,8 +163,8 @@ const PurePreviewMessage = ({
                       <div className="size-8" />
 
                       <MessageEditor
-                        key={message.id}
-                        message={message}
+                        key={rawMessage.id}
+                        message={rawMessage}
                         setMode={setMode}
                         setMessages={setMessages}
                         reload={reload}
@@ -201,9 +233,9 @@ const PurePreviewMessage = ({
 
             {!isReadonly && (
               <MessageActions
-                key={`action-${message.id}`}
+                key={`action-${rawMessage.id}`}
                 chatId={chatId}
-                message={message}
+                message={rawMessage}
                 vote={vote}
                 isLoading={isLoading}
               />
@@ -224,6 +256,71 @@ export const PreviewMessage = memo(PurePreviewMessage, (prevProps, nextProps) =>
 
   return true;
 });
+
+const renderAssistantMessageContent = (message: ExtendedUIMessage, text: string) => {
+  if (!message.citations || message.citations.length === 0 || !message.sources) {
+    return <Markdown>{sanitizeText(text)}</Markdown>;
+  }
+
+  // Create a map of sourceId to source details for quick lookup
+  const sourceDetailsMap = new Map<string, CitationSource>();
+  message.sources.forEach(source => sourceDetailsMap.set(String(source.id), source));
+
+  const parts = text.split(/(\\[Source\\s*\\d+\\])/g);
+
+  return (
+    <div className="whitespace-pre-wrap">
+      {parts.map((part, index) => {
+        const citationMatch = /\\\[Source\\s*(\\d+)\\]/.exec(part);
+        if (citationMatch) {
+          const sourceNum = Number.parseInt(citationMatch[1], 10);
+          // Attempt to find the Nth citation in the message.citations array (1-based to 0-based)
+          const citationInfo = message.citations?.[sourceNum - 1];
+          
+          if (citationInfo) {
+            // Use citationInfo.sourceId (which should be the chunk_id) to find the full source detail
+            const sourceDetail = sourceDetailsMap.get(String(citationInfo.sourceId));
+
+            if (sourceDetail) {
+              return (
+                <HoverCard key={`cite-${message.id}-${index}`} openDelay={200}>
+                  <HoverCardTrigger asChild>
+                    <span className="citation-link cursor-pointer text-blue-500 hover:text-blue-700 font-semibold underline decoration-dotted">
+                      {part}
+                    </span>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-96" side="top">
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold">{sourceDetail.title || citationInfo.documentTitle || 'Source Document'}</h4>
+                      <p className="text-xs text-gray-500">
+                        File: {sourceDetail.documentSource || citationInfo.documentSource || 'N/A'}
+                        {sourceDetail.pageNumber || citationInfo.pageNumber ? `, Page: ${sourceDetail.pageNumber || citationInfo.pageNumber}` : ''}
+                      </p>
+                      <blockquote className="text-xs text-muted-foreground italic border-l-2 pl-2 max-h-24 overflow-y-auto">
+                        {sanitizeText(citationInfo.quote)}
+                      </blockquote>
+                      {sourceDetail.snippet && sourceDetail.snippet !== citationInfo.quote && (
+                        <details className="text-xs">
+                          <summary className="cursor-pointer">Show context</summary>
+                          <p className="text-muted-foreground mt-1 max-h-24 overflow-y-auto">{sanitizeText(sourceDetail.snippet)}</p>
+                        </details>
+                      )}
+                      {/* <div className="text-xs text-gray-500">Confidence: {sourceDetail.score?.toFixed(2)}</div> */}
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              );
+            }
+          }
+        }
+        // Sanitize non-citation parts before rendering if they are not going through Markdown component
+        // If Markdown component is used for each part, it will handle sanitization.
+        // Here, we assume sanitizeText is for direct HTML rendering if not using Markdown for each part.
+        return <span key={`part-${message.id}-${index}`}>{part}</span>; 
+      })}
+    </div>
+  );
+};
 
 export const ThinkingMessage = () => {
   const role = "assistant";

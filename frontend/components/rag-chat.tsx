@@ -168,7 +168,7 @@ export function RAGChat({ chatId, className }: RAGChatProps) {
           {parts.map((part, index) => {
             const match = /\[Source\s*(\d+)\]/.exec(part);
             if (match) {
-              const sourceNum = parseInt(match[1], 10);
+              const sourceNum = Number.parseInt(match[1], 10);
               const citation = message.citations?.find(c => c.id === sourceNum);
               
               if (citation) {

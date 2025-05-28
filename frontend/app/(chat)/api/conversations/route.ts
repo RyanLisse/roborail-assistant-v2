@@ -1,5 +1,5 @@
 import { backendClient } from "@/lib/api/backend-client";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 export const maxDuration = 30;
@@ -8,8 +8,8 @@ export const maxDuration = 30;
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "20");
+    const page = Number.parseInt(searchParams.get("page") || "1");
+    const pageSize = Number.parseInt(searchParams.get("pageSize") || "20");
     const search = searchParams.get("search") || undefined;
 
     const result = await backendClient.listConversations(

@@ -1,65 +1,61 @@
 import { api } from "encore.dev/api";
-import { z } from "zod";
-import { v4 as uuidv4 } from "uuid";
 import log from "encore.dev/log";
-import { processRAGQuery } from "./rag-orchestration";
-import { 
-  createConversation, 
-  addMessage, 
+import {
+  addMessage,
+  createConversation,
   getConversation as getConversationDetails,
+  getConversationHistory,
   listConversations as listUserConversations,
   deleteConversation as removeConversation,
-  getConversationHistory
 } from "./conversation-management";
 import { deleteDraft } from "./draft-autosave";
+import { processRAGQuery } from "./rag-orchestration";
 
 // Create a service-specific logger instance
 const logger = log.with({ service: "chat-service" });
 
-// Enhanced types for the chat service
-export const ChatRequest = z.object({
-  message: z.string().min(1).max(2000),
-  conversationId: z.string().optional(),
-  userId: z.string().min(1),
-  responseMode: z.enum(["detailed", "concise", "technical", "conversational"]).default("detailed"),
-  enableReranking: z.boolean().default(true),
-});
+// Define explicit interfaces for ChatRequest, ChatResponse, ListConversationsRequest
+export interface ChatRequest {
+  message: string;
+  conversationId?: string;
+  userId: string;
+  responseMode: "detailed" | "concise" | "technical" | "conversational";
+  enableReranking: boolean;
+}
 
-export const ChatResponse = z.object({
-  conversationId: z.string(),
-  messageId: z.string(),
-  content: z.string(),
-  citations: z.array(z.object({
-    documentId: z.string(),
-    filename: z.string(),
-    pageNumber: z.number().optional(),
-    chunkContent: z.string(),
-    relevanceScore: z.number(),
-    citationIndex: z.number(),
-  })),
-  metadata: z.object({
-    searchTime: z.number(),
-    llmTime: z.number(),
-    totalTime: z.number(),
-    tokensUsed: z.number(),
-    documentsFound: z.number(),
-  }),
-  followUpQuestions: z.array(z.string()).optional(),
-});
+export interface ChatResponse {
+  conversationId: string;
+  messageId: string;
+  content: string;
+  citations: Array<{
+    documentId: string;
+    filename: string;
+    pageNumber?: number;
+    chunkContent: string;
+    relevanceScore: number;
+    citationIndex: number;
+  }>;
+  metadata: {
+    searchTime: number;
+    llmTime: number;
+    totalTime: number;
+    tokensUsed: number;
+    documentsFound: number;
+  };
+  followUpQuestions?: string[];
+}
 
-export const ListConversationsRequest = z.object({
-  userId: z.string().min(1),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-});
+export interface ListConversationsRequest {
+  userId: string;
+  page: number;
+  pageSize: number;
+  search?: string;
+}
 
 // Main chat endpoint - integrates with RAG orchestration
 export const sendMessage = api(
   { expose: true, method: "POST", path: "/chat/message" },
-  async (req: z.infer<typeof ChatRequest>): Promise<z.infer<typeof ChatResponse>> => {
-    const startTime = Date.now();
-
+  async (req: ChatRequest): Promise<ChatResponse> => {
     try {
       let conversationId = req.conversationId;
 
@@ -97,18 +93,18 @@ export const sendMessage = api(
       } catch (draftError) {
         // Log but don't fail the message sending if draft clearing fails
         if (draftError instanceof Error) {
-          logger.warn("Failed to clear draft after sending message", { 
-            conversationId, 
-            userId: req.userId, 
-            errorName: draftError.name, 
-            errorMessage: draftError.message, 
-            errorStack: draftError.stack 
+          logger.warn("Failed to clear draft after sending message", {
+            conversationId,
+            userId: req.userId,
+            errorName: draftError.name,
+            errorMessage: draftError.message,
+            errorStack: draftError.stack,
           });
         } else {
-          logger.warn("Failed to clear draft after sending message due to unknown error type", { 
-            conversationId, 
-            userId: req.userId, 
-            draftError 
+          logger.warn("Failed to clear draft after sending message due to unknown error type", {
+            conversationId,
+            userId: req.userId,
+            draftError,
           });
         }
       }
@@ -140,30 +136,31 @@ export const sendMessage = api(
         },
         followUpQuestions: ragResponse.followUpQuestions,
       };
-
     } catch (error) {
       const errorMessage = "Failed to process chat message";
       if (error instanceof Error) {
-        logger.error(error, errorMessage, { 
-          conversationId: req.conversationId, 
-          userId: req.userId, 
-          requestMessage: req.message 
+        logger.error(error, errorMessage, {
+          conversationId: req.conversationId,
+          userId: req.userId,
+          requestMessage: req.message,
         });
       } else {
-        logger.error(errorMessage, { 
-          conversationId: req.conversationId, 
-          userId: req.userId, 
-          requestMessage: req.message, 
-          error 
+        logger.error(errorMessage, {
+          conversationId: req.conversationId,
+          userId: req.userId,
+          requestMessage: req.message,
+          error,
         });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );
 
 // Get conversation with messages
-export const getConversation = api(
+export const getConversationBasic = api(
   { expose: true, method: "GET", path: "/chat/conversation/:conversationId" },
   async ({ conversationId, userId }: { conversationId: string; userId: string }) => {
     try {
@@ -175,33 +172,51 @@ export const getConversation = api(
       } else {
         logger.error(errorMessage, { conversationId, userId, error });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );
 
 // List user conversations
-export const listConversations = api(
-  { expose: true, method: "GET", path: "/chat/conversations" },
-  async (req: z.infer<typeof ListConversationsRequest>) => {
+export const listConversationsBasic = api(
+  { expose: true, method: "GET", path: "/chat/conversations-basic" },
+  async (req: ListConversationsRequest) => {
     try {
       return await listUserConversations(req);
     } catch (error) {
       const errorMessage = "Failed to list conversations";
       if (error instanceof Error) {
-        logger.error(error, errorMessage, { userId: req.userId, page: req.page, pageSize: req.pageSize, search: req.search });
+        logger.error(error, errorMessage, {
+          userId: req.userId,
+          page: req.page,
+          pageSize: req.pageSize,
+          search: req.search,
+        });
       } else {
-        logger.error(errorMessage, { userId: req.userId, page: req.page, pageSize: req.pageSize, search: req.search, error });
+        logger.error(errorMessage, {
+          userId: req.userId,
+          page: req.page,
+          pageSize: req.pageSize,
+          search: req.search,
+          error,
+        });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );
 
 // Delete conversation
-export const deleteConversation = api(
+export const deleteConversationBasic = api(
   { expose: true, method: "DELETE", path: "/chat/conversation/:conversationId" },
-  async ({ conversationId, userId }: { conversationId: string; userId: string }): Promise<{ success: boolean }> => {
+  async ({
+    conversationId,
+    userId,
+  }: { conversationId: string; userId: string }): Promise<{ success: boolean }> => {
     try {
       return await removeConversation({ conversationId, userId });
     } catch (error) {
@@ -211,7 +226,9 @@ export const deleteConversation = api(
       } else {
         logger.error(errorMessage, { conversationId, userId, error });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );
@@ -229,7 +246,9 @@ export const getMessages = api(
       } else {
         logger.error(errorMessage, { conversationId, userId, error });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );
@@ -237,7 +256,9 @@ export const getMessages = api(
 // Stream chat responses (for real-time chat experience)
 export const streamMessage = api(
   { expose: true, method: "POST", path: "/chat/stream" },
-  async (req: z.infer<typeof ChatRequest>): Promise<{ conversationId: string; messageId: string; status: string }> => {
+  async (
+    req: ChatRequest
+  ): Promise<{ conversationId: string; messageId: string; status: string }> => {
     // This would be implemented for streaming responses in a real-time chat
     // For now, we'll return a status that the client can poll
     try {
@@ -254,22 +275,24 @@ export const streamMessage = api(
       } else {
         logger.error(errorMessage, { requestBody: req, error });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );
 
 // Health check endpoint
-export const health = api(
+export const chatHealth = api(
   { expose: true, method: "GET", path: "/chat/health" },
   async (): Promise<{ status: string; timestamp: string; services: Record<string, boolean> }> => {
     try {
       // Import the RAG health check
       const { health: ragHealth } = await import("./rag-orchestration");
       const ragStatus = await ragHealth();
-      
+
       const isHealthy = ragStatus.status === "healthy";
-      logger.info("Chat service health check processed", { 
+      logger.info("Chat service health check processed", {
         overallStatus: isHealthy ? "healthy" : "degraded",
         ragStatus: ragStatus.status,
         conversationService: ragStatus.services.conversation,
@@ -294,7 +317,9 @@ export const health = api(
       } else {
         logger.error(errorMessage, { error });
       }
-      throw new Error(errorMessage + (error instanceof Error ? `: ${error.message}`: ': Unknown error'));
+      throw new Error(
+        `${errorMessage}${error instanceof Error ? `: ${error.message}` : ": Unknown error"}`
+      );
     }
   }
 );

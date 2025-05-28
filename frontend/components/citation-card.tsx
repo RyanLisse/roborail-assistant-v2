@@ -1,6 +1,6 @@
 "use client";
 
-import { type Citation } from "@/lib/api/backend-client";
+import type { Citation } from "@/lib/api/backend-client";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -21,7 +21,7 @@ export function CitationCard({ citation, index, className }: CitationCardProps) 
     return `${Math.round(score * 100)}%`;
   };
 
-  const truncateText = (text: string, maxLength: number = 150) => {
+  const truncateText = (text: string, maxLength = 150) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + "...";
   };
@@ -155,7 +155,7 @@ export function parseCitationsInText(
   let match;
   
   while ((match = citationRegex.exec(text)) !== null) {
-    const citationIndex = parseInt(match[1]);
+    const citationIndex = Number.parseInt(match[1]);
     const citation = citations.find(c => c.citationIndex === citationIndex);
     
     // Add text before citation

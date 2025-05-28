@@ -8,10 +8,14 @@ const geminiApiKey = secret("GeminiApiKey");
 
 // Validation schemas
 export const LLMRequestSchema = z.object({
-  messages: z.array(z.object({
-    role: z.enum(["user", "assistant", "system"]),
-    content: z.string().min(1, "Message content cannot be empty"),
-  })).min(1, "At least one message is required"),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant", "system"]),
+        content: z.string().min(1, "Message content cannot be empty"),
+      })
+    )
+    .min(1, "At least one message is required"),
   temperature: z.number().min(0).max(2).optional().default(0.7),
   maxTokens: z.number().int().min(1).max(4096).optional().default(1000),
   topP: z.number().min(0).max(1).optional().default(0.95),
@@ -30,7 +34,7 @@ export const RAGRequestSchema = z.object({
 // Types
 export interface LLMRequest {
   messages: Array<{
-    role: 'user' | 'assistant' | 'system';
+    role: "user" | "assistant" | "system";
     content: string;
   }>;
   temperature?: number;
@@ -116,46 +120,46 @@ interface GeminiResponse {
 const SAFETY_SETTINGS = [
   {
     category: "HARM_CATEGORY_HARASSMENT",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE"
+    threshold: "BLOCK_MEDIUM_AND_ABOVE",
   },
   {
     category: "HARM_CATEGORY_HATE_SPEECH",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE"
+    threshold: "BLOCK_MEDIUM_AND_ABOVE",
   },
   {
     category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE"
+    threshold: "BLOCK_MEDIUM_AND_ABOVE",
   },
   {
     category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE"
-  }
+    threshold: "BLOCK_MEDIUM_AND_ABOVE",
+  },
 ];
 
 // Convert our message format to Gemini format
-function convertMessagesToGemini(messages: LLMRequest['messages']): GeminiMessage[] {
+function convertMessagesToGemini(messages: LLMRequest["messages"]): GeminiMessage[] {
   return messages
-    .filter(msg => msg.role !== 'system') // System messages handled separately
-    .map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
+    .filter((msg) => msg.role !== "system") // System messages handled separately
+    .map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
     }));
 }
 
 // Build RAG prompt with context
 function buildRAGPrompt(query: string, context: string[], systemPrompt?: string): string {
   const defaultSystemPrompt = `You are a helpful AI assistant. Use the provided context to answer the user's question accurately and comprehensively. If the context doesn't contain enough information to answer the question, say so clearly. Always cite specific parts of the context when making claims.`;
-  
+
   const prompt = systemPrompt || defaultSystemPrompt;
-  
+
   let ragPrompt = `${prompt}\n\nContext:\n`;
-  
-  context.forEach((chunk, index) => {
+
+  for (const [index, chunk] of context.entries()) {
     ragPrompt += `[${index + 1}] ${chunk}\n\n`;
-  });
-  
+  }
+
   ragPrompt += `Question: ${query}\n\nAnswer:`;
-  
+
   return ragPrompt;
 }
 
@@ -167,9 +171,9 @@ async function callGeminiAPI(request: GeminiRequest): Promise<GeminiResponse> {
   console.log(`Making Gemini API request with ${request.contents.length} messages`);
 
   const response = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
   });
@@ -180,7 +184,7 @@ async function callGeminiAPI(request: GeminiRequest): Promise<GeminiResponse> {
     throw new Error(`Gemini API request failed: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json() as GeminiResponse;
+  const data = (await response.json()) as GeminiResponse;
 
   // Check for safety blocks
   if (data.promptFeedback?.blockReason) {
@@ -188,7 +192,7 @@ async function callGeminiAPI(request: GeminiRequest): Promise<GeminiResponse> {
   }
 
   if (!data.candidates || data.candidates.length === 0) {
-    throw new Error('No response candidates returned from Gemini API');
+    throw new Error("No response candidates returned from Gemini API");
   }
 
   return data;
@@ -200,7 +204,7 @@ async function generateResponse(request: LLMRequest): Promise<LLMResponse> {
 
   try {
     // Extract system message if present
-    const systemMessage = request.messages.find(msg => msg.role === 'system');
+    const systemMessage = request.messages.find((msg) => msg.role === "system");
     const systemPrompt = systemMessage?.content || request.systemPrompt;
 
     // Convert messages to Gemini format
@@ -222,7 +226,7 @@ async function generateResponse(request: LLMRequest): Promise<LLMResponse> {
     // Add system instruction if present
     if (systemPrompt) {
       geminiRequest.systemInstruction = {
-        parts: [{ text: systemPrompt }]
+        parts: [{ text: systemPrompt }],
       };
     }
 
@@ -231,7 +235,7 @@ async function generateResponse(request: LLMRequest): Promise<LLMResponse> {
 
     // Extract response content
     const candidate = geminiResponse.candidates[0];
-    const content = candidate.content.parts.map(part => part.text).join('');
+    const content = candidate.content.parts.map((part) => part.text).join("");
 
     console.log(`Gemini response generated in ${Date.now() - startTime}ms`);
 
@@ -243,36 +247,40 @@ async function generateResponse(request: LLMRequest): Promise<LLMResponse> {
         completionTokens: geminiResponse.usageMetadata.candidatesTokenCount,
         totalTokens: geminiResponse.usageMetadata.totalTokenCount,
       },
-      model: 'gemini-1.5-flash',
+      model: "gemini-1.5-flash",
       created: startTime,
     };
-
   } catch (error) {
-    console.error('LLM generation error:', error);
-    throw new Error(`LLM generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("LLM generation error:", error);
+    throw new Error(
+      `LLM generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
 // Core function to generate RAG response
 async function generateRAGResponse(request: RAGRequest): Promise<LLMResponse> {
   try {
-    console.log(`Generating RAG response for query: "${request.query}" with ${request.context.length} context chunks`);
+    console.log(
+      `Generating RAG response for query: "${request.query}" with ${request.context.length} context chunks`
+    );
 
     // Build RAG prompt
     const ragPrompt = buildRAGPrompt(request.query, request.context, request.systemPrompt);
 
     // Generate response using the RAG prompt
     const llmRequest: LLMRequest = {
-      messages: [{ role: 'user', content: ragPrompt }],
+      messages: [{ role: "user", content: ragPrompt }],
       temperature: request.temperature,
       maxTokens: request.maxTokens,
     };
 
     return await generateResponse(llmRequest);
-
   } catch (error) {
-    console.error('RAG generation error:', error);
-    throw new Error(`RAG generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("RAG generation error:", error);
+    throw new Error(
+      `RAG generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
@@ -280,16 +288,15 @@ async function generateRAGResponse(request: RAGRequest): Promise<LLMResponse> {
 async function validateConnection(): Promise<boolean> {
   try {
     const testRequest: LLMRequest = {
-      messages: [{ role: 'user', content: 'Hello' }],
+      messages: [{ role: "user", content: "Hello" }],
       maxTokens: 10,
       temperature: 0.1,
     };
 
     const response = await generateResponse(testRequest);
     return response.content.length > 0;
-
   } catch (error) {
-    console.error('Gemini API validation failed:', error);
+    console.error("Gemini API validation failed:", error);
     return false;
   }
 }
@@ -303,14 +310,15 @@ export const generate = api(
     try {
       // Validate request
       const validatedReq = LLMRequestSchema.parse(req);
-      
+
       console.log(`LLM generation request with ${validatedReq.messages.length} messages`);
-      
+
       return await generateResponse(validatedReq);
-      
     } catch (error) {
       console.error("LLM generation endpoint error:", error);
-      throw new Error(`LLM generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `LLM generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -322,14 +330,17 @@ export const generateRAG = api(
     try {
       // Validate request
       const validatedReq = RAGRequestSchema.parse(req);
-      
-      console.log(`RAG generation request: "${validatedReq.query}" with ${validatedReq.context.length} context chunks`);
-      
+
+      console.log(
+        `RAG generation request: "${validatedReq.query}" with ${validatedReq.context.length} context chunks`
+      );
+
       return await generateRAGResponse(validatedReq);
-      
     } catch (error) {
       console.error("RAG generation endpoint error:", error);
-      throw new Error(`RAG generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `RAG generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 );
@@ -340,17 +351,16 @@ export const health = api(
   async (): Promise<{ status: string; connected: boolean; timestamp: number }> => {
     try {
       const connected = await validateConnection();
-      
+
       return {
-        status: connected ? 'healthy' : 'degraded',
+        status: connected ? "healthy" : "degraded",
         connected,
         timestamp: Date.now(),
       };
-      
     } catch (error) {
       console.error("LLM health check error:", error);
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         connected: false,
         timestamp: Date.now(),
       };
@@ -359,9 +369,4 @@ export const health = api(
 );
 
 // Export core functions for internal use
-export {
-  generateResponse,
-  generateRAGResponse,
-  validateConnection,
-  buildRAGPrompt,
-};
+export { generateResponse, generateRAGResponse, validateConnection, buildRAGPrompt };

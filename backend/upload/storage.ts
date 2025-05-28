@@ -32,7 +32,7 @@ export interface BucketDownloadResponse {
 }
 
 export interface BucketError {
-  type: 'UPLOAD_FAILED' | 'DOWNLOAD_FAILED' | 'FILE_NOT_FOUND' | 'INVALID_PATH';
+  type: "UPLOAD_FAILED" | "DOWNLOAD_FAILED" | "FILE_NOT_FOUND" | "INVALID_PATH";
   message: string;
   bucketPath?: string;
 }
@@ -40,22 +40,22 @@ export interface BucketError {
 // Helper function to generate bucket path
 export function generateBucketPath(documentId: string, fileName: string): string {
   // Common file extensions we support
-  const validExtensions = ['pdf', 'docx', 'doc', 'txt', 'md'];
-  
+  const validExtensions = ["pdf", "docx", "doc", "txt", "md"];
+
   // Extract file extension, handle case where there's no extension
-  const parts = fileName.split('.');
+  const parts = fileName.split(".");
   if (parts.length === 1) {
     // No extension
     return `uploads/${documentId}`;
   }
-  
+
   const lastPart = parts[parts.length - 1].toLowerCase();
-  
+
   // Check if the last part is a valid file extension
   if (validExtensions.includes(lastPart)) {
     return `uploads/${documentId}.${lastPart}`;
   }
-  
+
   // If not a valid extension, treat as filename without extension
   return `uploads/${documentId}`;
 }
@@ -65,17 +65,17 @@ export function calculateFileSize(data: Buffer | string): number {
   if (Buffer.isBuffer(data)) {
     return data.length;
   }
-  return Buffer.from(data, 'base64').length;
+  return Buffer.from(data, "base64").length;
 }
 
 // Helper function to validate bucket paths
 export function isValidBucketPath(path: string): boolean {
   // Basic validation for bucket paths
   if (!path || path.length === 0) return false;
-  if (path.includes('..')) return false; // Prevent path traversal
-  if (!path.startsWith('uploads/')) return false;
-  if (path === 'uploads/') return false;
-  
+  if (path.includes("..")) return false; // Prevent path traversal
+  if (!path.startsWith("uploads/")) return false;
+  if (path === "uploads/") return false;
+
   return true;
 }
 
@@ -85,7 +85,7 @@ function prepareFileData(fileData: Buffer | string): Buffer {
     return fileData;
   }
   // Assume string is base64 encoded
-  return Buffer.from(fileData, 'base64');
+  return Buffer.from(fileData, "base64");
 }
 
 // Upload file to bucket
@@ -93,21 +93,21 @@ export async function uploadToBucket(request: BucketUploadRequest): Promise<Buck
   try {
     // Generate bucket path
     const bucketPath = generateBucketPath(request.documentId, request.fileName);
-    
+
     // Validate bucket path
     if (!isValidBucketPath(bucketPath)) {
       throw new Error(`Invalid bucket path: ${bucketPath}`);
     }
-    
+
     // Prepare file data
     const fileBuffer = prepareFileData(request.fileData);
     const fileSize = fileBuffer.length;
-    
+
     // Upload to Encore bucket
     const uploadResult = await documentBucket.upload(bucketPath, fileBuffer, {
       contentType: request.contentType,
     });
-    
+
     // Return successful upload response
     return {
       bucketPath,
@@ -115,68 +115,68 @@ export async function uploadToBucket(request: BucketUploadRequest): Promise<Buck
       fileSize,
       etag: uploadResult.etag,
     };
-    
   } catch (error) {
-    console.error('Bucket upload error:', error);
+    console.error("Bucket upload error:", error);
     const bucketError: BucketError = {
-      type: 'UPLOAD_FAILED',
-      message: error instanceof Error ? error.message : 'Unknown upload error',
+      type: "UPLOAD_FAILED",
+      message: error instanceof Error ? error.message : "Unknown upload error",
     };
     throw bucketError;
   }
 }
 
 // Download file from bucket
-export async function downloadFromBucket(request: BucketDownloadRequest): Promise<BucketDownloadResponse> {
+export async function downloadFromBucket(
+  request: BucketDownloadRequest
+): Promise<BucketDownloadResponse> {
   try {
     // Validate bucket path
     if (!isValidBucketPath(request.bucketPath)) {
       const bucketError: BucketError = {
-        type: 'INVALID_PATH',
+        type: "INVALID_PATH",
         message: `Invalid bucket path: ${request.bucketPath}`,
         bucketPath: request.bucketPath,
       };
       throw bucketError;
     }
-    
+
     // Download from Encore bucket
     const downloadResult = await documentBucket.download(request.bucketPath);
-    
+
     if (!downloadResult) {
       const bucketError: BucketError = {
-        type: 'FILE_NOT_FOUND',
-        message: 'File not found in bucket',
+        type: "FILE_NOT_FOUND",
+        message: "File not found in bucket",
         bucketPath: request.bucketPath,
       };
       throw bucketError;
     }
-    
+
     // Convert stream to buffer
     const chunks: Buffer[] = [];
     for await (const chunk of downloadResult.stream) {
       chunks.push(chunk);
     }
     const data = Buffer.concat(chunks);
-    
+
     // Return successful download response
     return {
       data,
-      contentType: downloadResult.contentType || 'application/octet-stream',
+      contentType: downloadResult.contentType || "application/octet-stream",
       fileSize: data.length,
       lastModified: downloadResult.lastModified || new Date(),
     };
-    
   } catch (error) {
-    console.error('Bucket download error:', error);
-    
+    console.error("Bucket download error:", error);
+
     // If already a BucketError, re-throw as is
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
-    
+
     const bucketError: BucketError = {
-      type: 'DOWNLOAD_FAILED',
-      message: error instanceof Error ? error.message : 'Unknown download error',
+      type: "DOWNLOAD_FAILED",
+      message: error instanceof Error ? error.message : "Unknown download error",
       bucketPath: request.bucketPath,
     };
     throw bucketError;
@@ -189,7 +189,7 @@ export async function fileExistsInBucket(bucketPath: string): Promise<boolean> {
     if (!isValidBucketPath(bucketPath)) {
       return false;
     }
-    
+
     const result = await documentBucket.download(bucketPath);
     return result !== null;
   } catch {
@@ -202,25 +202,25 @@ export async function deleteFromBucket(bucketPath: string): Promise<void> {
   try {
     if (!isValidBucketPath(bucketPath)) {
       const bucketError: BucketError = {
-        type: 'INVALID_PATH',
+        type: "INVALID_PATH",
         message: `Invalid bucket path: ${bucketPath}`,
         bucketPath,
       };
       throw bucketError;
     }
-    
+
     await documentBucket.remove(bucketPath);
   } catch (error) {
-    console.error('Bucket delete error:', error);
-    
+    console.error("Bucket delete error:", error);
+
     // If already a BucketError, re-throw as is
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
-    
+
     const bucketError: BucketError = {
-      type: 'DOWNLOAD_FAILED', // Reusing for delete operations
-      message: error instanceof Error ? error.message : 'Unknown delete error',
+      type: "DOWNLOAD_FAILED", // Reusing for delete operations
+      message: error instanceof Error ? error.message : "Unknown delete error",
       bucketPath,
     };
     throw bucketError;
@@ -236,46 +236,45 @@ export async function getBucketFileMetadata(bucketPath: string): Promise<{
   try {
     if (!isValidBucketPath(bucketPath)) {
       const bucketError: BucketError = {
-        type: 'INVALID_PATH',
+        type: "INVALID_PATH",
         message: `Invalid bucket path: ${bucketPath}`,
         bucketPath,
       };
       throw bucketError;
     }
-    
+
     // Note: Encore buckets might not have a separate metadata-only API
     // For now, we'll use the download method and close the stream immediately
     const downloadResult = await documentBucket.download(bucketPath);
-    
+
     if (!downloadResult) {
       const bucketError: BucketError = {
-        type: 'FILE_NOT_FOUND',
-        message: 'File not found in bucket',
+        type: "FILE_NOT_FOUND",
+        message: "File not found in bucket",
         bucketPath,
       };
       throw bucketError;
     }
-    
+
     // Close the stream immediately since we only want metadata
     downloadResult.stream.destroy();
-    
+
     return {
-      contentType: downloadResult.contentType || 'application/octet-stream',
+      contentType: downloadResult.contentType || "application/octet-stream",
       lastModified: downloadResult.lastModified || new Date(),
       etag: downloadResult.etag,
     };
-    
   } catch (error) {
-    console.error('Bucket metadata error:', error);
-    
+    console.error("Bucket metadata error:", error);
+
     // If already a BucketError, re-throw as is
-    if (error && typeof error === 'object' && 'type' in error) {
+    if (error && typeof error === "object" && "type" in error) {
       throw error;
     }
-    
+
     const bucketError: BucketError = {
-      type: 'DOWNLOAD_FAILED',
-      message: error instanceof Error ? error.message : 'Unknown metadata error',
+      type: "DOWNLOAD_FAILED",
+      message: error instanceof Error ? error.message : "Unknown metadata error",
       bucketPath,
     };
     throw bucketError;

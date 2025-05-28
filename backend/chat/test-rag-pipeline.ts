@@ -4,14 +4,14 @@
  * Run with: npx tsx backend/chat/test-rag-pipeline.ts
  */
 
-import { 
-  detectQueryIntent, 
-  extractKeyTerms, 
+import {
   assembleContext,
   buildLLMRequest,
-  parseLLMResponse,
+  detectQueryIntent,
+  extractKeyTerms,
   generateFollowUpQuestions,
-  getResponseModeConfig
+  getResponseModeConfig,
+  parseLLMResponse,
 } from "./rag-orchestration";
 
 async function testRAGComponents() {
@@ -29,13 +29,16 @@ async function testRAGComponents() {
   for (const query of queries) {
     const intent = detectQueryIntent(query);
     console.log(`Query: "${query}"`);
-    console.log(`Intent: ${intent.type}, Requires Docs: ${intent.requiresDocuments}, Requires Context: ${intent.requiresContext}`);
+    console.log(
+      `Intent: ${intent.type}, Requires Docs: ${intent.requiresDocuments}, Requires Context: ${intent.requiresContext}`
+    );
     console.log(`Key Terms: ${intent.keyTerms.join(", ")}\n`);
   }
 
   // Test 2: Key Term Extraction
   console.log("2️⃣ Testing Key Term Extraction");
-  const complexQuery = "What are the main differences between supervised and unsupervised machine learning algorithms in neural networks?";
+  const complexQuery =
+    "What are the main differences between supervised and unsupervised machine learning algorithms in neural networks?";
   const keyTerms = extractKeyTerms(complexQuery);
   console.log(`Query: "${complexQuery}"`);
   console.log(`Key Terms: ${keyTerms.join(", ")}\n`);
@@ -45,15 +48,17 @@ async function testRAGComponents() {
   const mockSearchResults = [
     {
       id: "chunk-1",
-      content: "Machine learning is a subset of artificial intelligence that enables systems to learn from data without explicit programming.",
+      content:
+        "Machine learning is a subset of artificial intelligence that enables systems to learn from data without explicit programming.",
       documentId: "doc-1",
       filename: "ml-guide.pdf",
       pageNumber: 1,
       relevanceScore: 0.95,
     },
     {
-      id: "chunk-2", 
-      content: "Supervised learning uses labeled training data to learn a mapping from inputs to outputs.",
+      id: "chunk-2",
+      content:
+        "Supervised learning uses labeled training data to learn a mapping from inputs to outputs.",
       documentId: "doc-2",
       filename: "ml-types.pdf",
       pageNumber: 3,
@@ -80,9 +85,15 @@ async function testRAGComponents() {
 
   // Test 4: LLM Request Building
   console.log("4️⃣ Testing LLM Request Building");
-  const testIntent = { type: "document_query", requiresDocuments: true, requiresContext: false, confidence: 0.9, keyTerms: ["machine", "learning"] };
+  const testIntent = {
+    type: "document_query",
+    requiresDocuments: true,
+    requiresContext: false,
+    confidence: 0.9,
+    keyTerms: ["machine", "learning"],
+  };
   const llmRequest = buildLLMRequest("What is machine learning?", context, testIntent, "detailed");
-  
+
   console.log("LLM Request Structure:");
   console.log(`Messages: ${llmRequest.messages.length}`);
   console.log(`Temperature: ${llmRequest.temperature}`);
@@ -91,22 +102,29 @@ async function testRAGComponents() {
 
   // Test 5: Response Parsing
   console.log("5️⃣ Testing Response Parsing");
-  const mockLLMResponse = "Based on the provided documents [1][2], machine learning is a powerful approach to artificial intelligence. The first document [1] explains that it's a subset of AI, while the second document [2] describes supervised learning specifically.";
-  
+  const mockLLMResponse =
+    "Based on the provided documents [1][2], machine learning is a powerful approach to artificial intelligence. The first document [1] explains that it's a subset of AI, while the second document [2] describes supervised learning specifically.";
+
   const parsedResponse = parseLLMResponse(mockLLMResponse, context.sources);
   console.log("Parsed Content:", parsedResponse.content);
   console.log("Citations Found:", parsedResponse.citations.length);
   for (const citation of parsedResponse.citations) {
-    console.log(`- Citation ${citation.citationIndex}: ${citation.filename} (relevance: ${citation.relevanceScore})`);
+    console.log(
+      `- Citation ${citation.citationIndex}: ${citation.filename} (relevance: ${citation.relevanceScore})`
+    );
   }
 
   // Test 6: Follow-up Questions
   console.log("\n6️⃣ Testing Follow-up Question Generation");
-  const followUpQuestions = generateFollowUpQuestions("What is machine learning?", parsedResponse.content, testIntent);
+  const followUpQuestions = generateFollowUpQuestions(
+    "What is machine learning?",
+    parsedResponse.content,
+    testIntent
+  );
   console.log("Generated Follow-up Questions:");
-  followUpQuestions.forEach((question, index) => {
+  for (const [index, question] of followUpQuestions.entries()) {
     console.log(`${index + 1}. ${question}`);
-  });
+  }
 
   // Test 7: Response Mode Configurations
   console.log("\n7️⃣ Testing Response Mode Configurations");

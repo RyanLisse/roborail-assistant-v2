@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // Mock implementations for testing Cohere reranking functionality
 interface MockSearchRequest {
@@ -59,7 +59,7 @@ interface MockCohereRerankResponse {
 class MockRerankingService {
   private documents: Map<string, any[]> = new Map(); // userID -> documents
   private queryRelevancePatterns: Map<string, string[]> = new Map(); // query -> preferred content patterns
-  
+
   constructor() {
     this.setupMockData();
   }
@@ -70,7 +70,8 @@ class MockRerankingService {
       {
         id: "chunk_1",
         documentId: "doc_1",
-        content: "Machine learning algorithms are fundamental to artificial intelligence applications. They enable systems to automatically learn and improve from experience without being explicitly programmed for every scenario.",
+        content:
+          "Machine learning algorithms are fundamental to artificial intelligence applications. They enable systems to automatically learn and improve from experience without being explicitly programmed for every scenario.",
         chunkIndex: 0,
         pageNumber: 1,
         filename: "ml_fundamentals.pdf",
@@ -78,8 +79,9 @@ class MockRerankingService {
       },
       {
         id: "chunk_2",
-        documentId: "doc_1", 
-        content: "Deep learning is a subset of machine learning that uses neural networks with multiple layers. These networks can model complex patterns in data and are particularly effective for image recognition and natural language processing.",
+        documentId: "doc_1",
+        content:
+          "Deep learning is a subset of machine learning that uses neural networks with multiple layers. These networks can model complex patterns in data and are particularly effective for image recognition and natural language processing.",
         chunkIndex: 1,
         pageNumber: 2,
         filename: "ml_fundamentals.pdf",
@@ -88,7 +90,8 @@ class MockRerankingService {
       {
         id: "chunk_3",
         documentId: "doc_2",
-        content: "Python programming provides excellent libraries for data science. Popular packages include pandas for data manipulation, matplotlib for visualization, and scikit-learn for machine learning tasks.",
+        content:
+          "Python programming provides excellent libraries for data science. Popular packages include pandas for data manipulation, matplotlib for visualization, and scikit-learn for machine learning tasks.",
         chunkIndex: 0,
         pageNumber: 1,
         filename: "python_data_science.pdf",
@@ -97,7 +100,8 @@ class MockRerankingService {
       {
         id: "chunk_4",
         documentId: "doc_2",
-        content: "Data visualization techniques help understand patterns and trends in datasets. Creating effective charts and graphs is crucial for communicating insights to stakeholders and making data-driven decisions.",
+        content:
+          "Data visualization techniques help understand patterns and trends in datasets. Creating effective charts and graphs is crucial for communicating insights to stakeholders and making data-driven decisions.",
         chunkIndex: 1,
         pageNumber: 2,
         filename: "python_data_science.pdf",
@@ -106,7 +110,8 @@ class MockRerankingService {
       {
         id: "chunk_5",
         documentId: "doc_3",
-        content: "Natural language processing enables computers to understand and generate human language. Applications include text classification, sentiment analysis, machine translation, and chatbot development.",
+        content:
+          "Natural language processing enables computers to understand and generate human language. Applications include text classification, sentiment analysis, machine translation, and chatbot development.",
         chunkIndex: 0,
         pageNumber: 1,
         filename: "nlp_applications.pdf",
@@ -115,7 +120,8 @@ class MockRerankingService {
       {
         id: "chunk_6",
         documentId: "doc_3",
-        content: "Computer vision algorithms can analyze and interpret visual information from images and videos. This technology powers applications like facial recognition, medical image analysis, and autonomous vehicles.",
+        content:
+          "Computer vision algorithms can analyze and interpret visual information from images and videos. This technology powers applications like facial recognition, medical image analysis, and autonomous vehicles.",
         chunkIndex: 1,
         pageNumber: 2,
         filename: "computer_vision.pdf",
@@ -152,12 +158,12 @@ class MockRerankingService {
   private calculateRerankingScore(content: string, query: string): number {
     const contentLower = content.toLowerCase();
     const queryLower = query.toLowerCase();
-    
+
     // Get relevance patterns for this query
     const relevantPatterns = this.queryRelevancePatterns.get(queryLower) || [];
-    
+
     let score = 0.5; // Base score
-    
+
     // Check for exact pattern matches (high relevance)
     for (const pattern of relevantPatterns) {
       if (contentLower.includes(pattern.toLowerCase())) {
@@ -165,23 +171,23 @@ class MockRerankingService {
         break; // Only count the best match
       }
     }
-    
+
     // Check for query term matches
-    const queryTerms = queryLower.split(' ');
+    const queryTerms = queryLower.split(" ");
     let termMatches = 0;
     for (const term of queryTerms) {
       if (term.length > 2 && contentLower.includes(term)) {
         termMatches++;
       }
     }
-    
+
     // Boost score based on term coverage
     const termCoverage = termMatches / queryTerms.length;
     score += termCoverage * 0.2;
-    
+
     // Add slight randomness to simulate real reranking variation
     score += (Math.random() - 0.5) * 0.1;
-    
+
     // Ensure score is between 0 and 1
     return Math.max(0, Math.min(1, score));
   }
@@ -197,8 +203,8 @@ class MockRerankingService {
       }
 
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Calculate reranking scores for each result
       const rerankResults: MockCohereRerankResult[] = results.map((result, index) => ({
         index,
@@ -216,12 +222,12 @@ class MockRerankingService {
 
       // Sort by relevance score (descending)
       rerankResults.sort((a, b) => b.relevance_score - a.relevance_score);
-      
+
       // Limit to topN results
       const limitedResults = rerankResults.slice(0, topN || results.length);
-      
+
       // Map back to SearchResult format with new scores
-      const rerankedResults: MockSearchResult[] = limitedResults.map(rerankResult => {
+      const rerankedResults: MockSearchResult[] = limitedResults.map((rerankResult) => {
         const originalResult = results[rerankResult.index];
         return {
           ...originalResult,
@@ -229,9 +235,10 @@ class MockRerankingService {
         };
       });
 
-      console.log(`Reranked ${results.length} results to ${rerankedResults.length} results for query: "${query}"`);
+      console.log(
+        `Reranked ${results.length} results to ${rerankedResults.length} results for query: "${query}"`
+      );
       return rerankedResults;
-      
     } catch (error) {
       console.error("Mock reranking error:", error);
       // Fall back to original results
@@ -241,21 +248,19 @@ class MockRerankingService {
 
   async performSearchWithReranking(request: MockSearchRequest): Promise<MockSearchResponse> {
     const startTime = Date.now();
-    
+
     try {
       // Get user documents
       const userDocuments = this.documents.get(request.userID) || [];
-      
+
       // Simple search simulation (find any documents containing query terms)
-      const queryTerms = request.query.toLowerCase().split(' ');
+      const queryTerms = request.query.toLowerCase().split(" ");
       let results: MockSearchResult[] = [];
-      
+
       for (const doc of userDocuments) {
         const contentLower = doc.content.toLowerCase();
-        const hasMatch = queryTerms.some(term => 
-          term.length >= 3 && contentLower.includes(term)
-        );
-        
+        const hasMatch = queryTerms.some((term) => term.length >= 3 && contentLower.includes(term));
+
         if (hasMatch) {
           // Simple scoring based on term frequency
           let score = 0;
@@ -264,7 +269,7 @@ class MockRerankingService {
               score += 0.2;
             }
           }
-          
+
           results.push({
             id: doc.id,
             documentID: doc.documentId,
@@ -278,7 +283,7 @@ class MockRerankingService {
           });
         }
       }
-      
+
       // Apply reranking if enabled
       if (request.enableReranking && results.length > 1) {
         results = await this.rerankWithCohere(request.query, results, request.limit);
@@ -287,7 +292,7 @@ class MockRerankingService {
         results.sort((a, b) => b.score - a.score);
         results = results.slice(0, request.limit || 20);
       }
-      
+
       return {
         results,
         totalFound: results.length,
@@ -295,9 +300,10 @@ class MockRerankingService {
         processingTime: Date.now() - startTime,
         searchType: request.searchType || "hybrid",
       };
-      
     } catch (error) {
-      throw new Error(`Search with reranking failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Search with reranking failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 
@@ -308,7 +314,7 @@ class MockRerankingService {
   }
 }
 
-describe('Cohere Reranking Integration', () => {
+describe("Cohere Reranking Integration", () => {
   let mockService: MockRerankingService;
 
   beforeEach(() => {
@@ -319,8 +325,8 @@ describe('Cohere Reranking Integration', () => {
     mockService.clear();
   });
 
-  describe('Reranking Functionality', () => {
-    it('should rerank search results based on query relevance', async () => {
+  describe("Reranking Functionality", () => {
+    it("should rerank search results based on query relevance", async () => {
       const searchRequest: MockSearchRequest = {
         query: "machine learning algorithms",
         userID: "user1",
@@ -331,19 +337,19 @@ describe('Cohere Reranking Integration', () => {
       const response = await mockService.performSearchWithReranking(searchRequest);
 
       expect(response.results.length).toBeGreaterThan(0);
-      
+
       // Results should be sorted by reranking score (descending)
       for (let i = 1; i < response.results.length; i++) {
         expect(response.results[i].score).toBeLessThanOrEqual(response.results[i - 1].score);
       }
-      
+
       // Top result should be highly relevant to machine learning
       const topResult = response.results[0];
       expect(topResult.content.toLowerCase()).toMatch(/machine learning|algorithms/);
       expect(topResult.score).toBeGreaterThan(0.5);
     });
 
-    it('should compare reranked vs non-reranked results', async () => {
+    it("should compare reranked vs non-reranked results", async () => {
       const baseRequest: MockSearchRequest = {
         query: "data visualization techniques",
         userID: "user1",
@@ -362,19 +368,21 @@ describe('Cohere Reranking Integration', () => {
 
       expect(withReranking.results.length).toBeGreaterThan(0);
       expect(withoutReranking.results.length).toBeGreaterThan(0);
-      
+
       // Reranked results should have different ordering
       if (withReranking.results.length > 1 && withoutReranking.results.length > 1) {
         const rerankedTopId = withReranking.results[0].id;
         const originalTopId = withoutReranking.results[0].id;
-        
+
         // May or may not be different depending on original scores, but reranked should be more relevant
         const rerankedTop = withReranking.results[0];
-        expect(rerankedTop.content.toLowerCase()).toMatch(/data visualization|visualization|charts|graphs/);
+        expect(rerankedTop.content.toLowerCase()).toMatch(
+          /data visualization|visualization|charts|graphs/
+        );
       }
     });
 
-    it('should handle empty results gracefully', async () => {
+    it("should handle empty results gracefully", async () => {
       const searchRequest: MockSearchRequest = {
         query: "quantum computing blockchain", // No matching content
         userID: "user1",
@@ -388,7 +396,7 @@ describe('Cohere Reranking Integration', () => {
       expect(response.processingTime).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle single result without reranking', async () => {
+    it("should handle single result without reranking", async () => {
       // Create a very specific query that matches only one document
       const searchRequest: MockSearchRequest = {
         query: "natural language processing chatbot",
@@ -405,7 +413,7 @@ describe('Cohere Reranking Integration', () => {
       }
     });
 
-    it('should respect result limits in reranking', async () => {
+    it("should respect result limits in reranking", async () => {
       const searchRequest: MockSearchRequest = {
         query: "machine learning",
         userID: "user1",
@@ -416,7 +424,7 @@ describe('Cohere Reranking Integration', () => {
       const response = await mockService.performSearchWithReranking(searchRequest);
 
       expect(response.results.length).toBeLessThanOrEqual(3);
-      
+
       if (response.results.length > 1) {
         // Results should still be properly ordered
         for (let i = 1; i < response.results.length; i++) {
@@ -425,7 +433,7 @@ describe('Cohere Reranking Integration', () => {
       }
     });
 
-    it('should assign meaningful relevance scores', async () => {
+    it("should assign meaningful relevance scores", async () => {
       const searchRequest: MockSearchRequest = {
         query: "python programming data science",
         userID: "user1",
@@ -435,12 +443,12 @@ describe('Cohere Reranking Integration', () => {
       const response = await mockService.performSearchWithReranking(searchRequest);
 
       expect(response.results.length).toBeGreaterThan(0);
-      
+
       for (const result of response.results) {
         // All scores should be between 0 and 1
         expect(result.score).toBeGreaterThanOrEqual(0);
         expect(result.score).toBeLessThanOrEqual(1);
-        
+
         // Results with higher scores should be more relevant
         if (result.score > 0.7) {
           expect(result.content.toLowerCase()).toMatch(/python|programming|data science/);
@@ -449,8 +457,8 @@ describe('Cohere Reranking Integration', () => {
     });
   });
 
-  describe('Performance and Error Handling', () => {
-    it('should complete reranking within reasonable time', async () => {
+  describe("Performance and Error Handling", () => {
+    it("should complete reranking within reasonable time", async () => {
       const searchRequest: MockSearchRequest = {
         query: "machine learning algorithms artificial intelligence",
         userID: "user1",
@@ -465,27 +473,27 @@ describe('Cohere Reranking Integration', () => {
       expect(response.processingTime).toBeGreaterThan(0);
     });
 
-    it('should fallback gracefully on reranking errors', async () => {
+    it("should fallback gracefully on reranking errors", async () => {
       // Mock error scenario by using invalid data
       const mockResults: MockSearchResult[] = [
         {
           id: "chunk_1",
-          documentID: "doc_1", 
+          documentID: "doc_1",
           content: "Test content",
           score: 0.8,
-          metadata: { filename: "test.pdf", chunkIndex: 0 }
-        }
+          metadata: { filename: "test.pdf", chunkIndex: 0 },
+        },
       ];
 
       // Test direct reranking method with potential error conditions
       const rerankedResults = await mockService.rerankWithCohere("test query", mockResults);
-      
+
       // Should not throw errors and return valid results
       expect(rerankedResults).toBeDefined();
       expect(rerankedResults.length).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle large result sets efficiently', async () => {
+    it("should handle large result sets efficiently", async () => {
       // Create a large set of mock results
       const largeResults: MockSearchResult[] = [];
       for (let i = 0; i < 50; i++) {
@@ -494,22 +502,26 @@ describe('Cohere Reranking Integration', () => {
           documentID: `doc_${i}`,
           content: `Content about machine learning and artificial intelligence topic ${i}`,
           score: Math.random(),
-          metadata: { filename: `doc${i}.pdf`, chunkIndex: 0 }
+          metadata: { filename: `doc${i}.pdf`, chunkIndex: 0 },
         });
       }
 
-      const rerankedResults = await mockService.rerankWithCohere("machine learning", largeResults, 20);
-      
+      const rerankedResults = await mockService.rerankWithCohere(
+        "machine learning",
+        largeResults,
+        20
+      );
+
       expect(rerankedResults.length).toBeLessThanOrEqual(20);
       expect(rerankedResults.length).toBeGreaterThan(0);
-      
+
       // Should maintain proper ordering
       for (let i = 1; i < rerankedResults.length; i++) {
         expect(rerankedResults[i].score).toBeLessThanOrEqual(rerankedResults[i - 1].score);
       }
     });
 
-    it('should preserve result metadata through reranking', async () => {
+    it("should preserve result metadata through reranking", async () => {
       const searchRequest: MockSearchRequest = {
         query: "computer vision",
         userID: "user1",
@@ -519,20 +531,20 @@ describe('Cohere Reranking Integration', () => {
       const response = await mockService.performSearchWithReranking(searchRequest);
 
       expect(response.results.length).toBeGreaterThan(0);
-      
+
       for (const result of response.results) {
         expect(result.id).toBeDefined();
         expect(result.documentID).toBeDefined();
         expect(result.content).toBeDefined();
         expect(result.metadata).toBeDefined();
         expect(result.metadata.filename).toBeDefined();
-        expect(typeof result.metadata.chunkIndex).toBe('number');
+        expect(typeof result.metadata.chunkIndex).toBe("number");
       }
     });
   });
 
-  describe('Query-Specific Relevance', () => {
-    it('should prioritize highly relevant content for machine learning queries', async () => {
+  describe("Query-Specific Relevance", () => {
+    it("should prioritize highly relevant content for machine learning queries", async () => {
       const searchRequest: MockSearchRequest = {
         query: "machine learning algorithms",
         userID: "user1",
@@ -543,16 +555,19 @@ describe('Cohere Reranking Integration', () => {
       const response = await mockService.performSearchWithReranking(searchRequest);
 
       expect(response.results.length).toBeGreaterThan(0);
-      
+
       // Top results should contain machine learning content
       const topResults = response.results.slice(0, 2);
-      expect(topResults.some(r => 
-        r.content.toLowerCase().includes('machine learning') ||
-        r.content.toLowerCase().includes('algorithms')
-      )).toBe(true);
+      expect(
+        topResults.some(
+          (r) =>
+            r.content.toLowerCase().includes("machine learning") ||
+            r.content.toLowerCase().includes("algorithms")
+        )
+      ).toBe(true);
     });
 
-    it('should prioritize data visualization content for visualization queries', async () => {
+    it("should prioritize data visualization content for visualization queries", async () => {
       const searchRequest: MockSearchRequest = {
         query: "data visualization",
         userID: "user1",
@@ -563,16 +578,19 @@ describe('Cohere Reranking Integration', () => {
       const response = await mockService.performSearchWithReranking(searchRequest);
 
       expect(response.results.length).toBeGreaterThan(0);
-      
+
       // Should find visualization-related content
-      expect(response.results.some(r => 
-        r.content.toLowerCase().includes('visualization') ||
-        r.content.toLowerCase().includes('charts') ||
-        r.content.toLowerCase().includes('graphs')
-      )).toBe(true);
+      expect(
+        response.results.some(
+          (r) =>
+            r.content.toLowerCase().includes("visualization") ||
+            r.content.toLowerCase().includes("charts") ||
+            r.content.toLowerCase().includes("graphs")
+        )
+      ).toBe(true);
     });
 
-    it('should handle domain-specific queries appropriately', async () => {
+    it("should handle domain-specific queries appropriately", async () => {
       const queries = [
         "natural language processing",
         "python programming",
@@ -590,23 +608,23 @@ describe('Cohere Reranking Integration', () => {
 
         // Each query should return relevant results
         expect(response.results.length).toBeGreaterThanOrEqual(0);
-        
+
         if (response.results.length > 0) {
           const topResult = response.results[0];
           expect(topResult.score).toBeGreaterThan(0);
-          
+
           // Content should be relevant to the query domain
           const contentLower = topResult.content.toLowerCase();
-          const queryTerms = query.toLowerCase().split(' ');
-          const hasRelevantTerm = queryTerms.some(term => 
-            term.length > 2 && contentLower.includes(term)
+          const queryTerms = query.toLowerCase().split(" ");
+          const hasRelevantTerm = queryTerms.some(
+            (term) => term.length > 2 && contentLower.includes(term)
           );
           expect(hasRelevantTerm).toBe(true);
         }
       }
     });
 
-    it('should provide consistent reranking for identical queries', async () => {
+    it("should provide consistent reranking for identical queries", async () => {
       const query = "machine learning applications";
       const baseRequest: MockSearchRequest = {
         query,
@@ -620,12 +638,12 @@ describe('Cohere Reranking Integration', () => {
 
       // Should return similar results (allowing for small variations due to randomness)
       expect(response1.results.length).toBe(response2.results.length);
-      
+
       if (response1.results.length > 0) {
         // Top results should be similar (within reasonable variance)
         const topResult1 = response1.results[0];
         const topResult2 = response2.results[0];
-        
+
         // Scores might vary slightly due to randomness, but should be in similar range
         expect(Math.abs(topResult1.score - topResult2.score)).toBeLessThan(0.2);
       }

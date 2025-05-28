@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deepeval, Context } from 'deepeval';
+import { deepeval, type Context } from 'deepeval';
 import { 
   assert_retrieval_context_contains_enough_information,
   assert_answer_matches_or_contains_enough_context,
@@ -39,7 +39,7 @@ const ragTestCases: RagTestCase[] = [
 describe('RAG Evaluation with DeepEval', () => {
   // Use a single describe block for all RAG evaluations
 
-  ragTestCases.forEach((testCase, index) => {
+  for (const testCase of ragTestCases) {
     it(`should evaluate RAG response for query: ${testCase.query.substring(0, 50)}...`, async () => {
       // In a real scenario, you would call your RAG pipeline here
       // and get the actual response and retrieved documents.
@@ -66,5 +66,5 @@ describe('RAG Evaluation with DeepEval', () => {
       // If the evaluate call completes without throwing, the test passes.
       expect(true).toBe(true); // This expect is just a placeholder, DeepEval handles the actual evaluation assertions.
     }, 30000); // Increase test timeout for DeepEval if necessary
-  });
-}); 
+  }
+});

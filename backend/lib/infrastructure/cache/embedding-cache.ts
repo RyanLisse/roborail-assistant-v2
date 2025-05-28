@@ -1,7 +1,7 @@
+import crypto from "crypto";
+import { MetricsCollector } from "../../monitoring/metrics";
+import { type CacheConfig, getCacheConfig, validateCacheConfig } from "./config";
 import { getRedisClient } from "./redis.client";
-import { getCacheConfig, validateCacheConfig, type CacheConfig } from "./config";
-import { MetricsRecorder } from "../../monitoring/metrics";
-import crypto from 'crypto';
 
 interface CacheEntry<T> {
   data: T;
@@ -17,7 +17,7 @@ export class MultiLevelEmbeddingCache {
   constructor(config?: Partial<CacheConfig>) {
     // Get default config and merge with provided options
     this.config = { ...getCacheConfig(), ...config };
-    
+
     // Validate configuration
     validateCacheConfig(this.config);
 
@@ -25,13 +25,16 @@ export class MultiLevelEmbeddingCache {
     try {
       this.redis = getRedisClient();
     } catch (error) {
-      console.warn("Failed to initialize Redis for embedding cache. Falling back to L1 only:", error);
+      console.warn(
+        "Failed to initialize Redis for embedding cache. Falling back to L1 only:",
+        error
+      );
       this.redis = null;
     }
   }
 
   private generateKey(text: string): string {
-    return `emb:${crypto.createHash('sha256').update(text.trim().toLowerCase()).digest('hex')}`;
+    return `emb:${crypto.createHash("sha256").update(text.trim().toLowerCase()).digest("hex")}`;
   }
 
   async get(textToEmbed: string): Promise<number[] | null> {
@@ -39,15 +42,16 @@ export class MultiLevelEmbeddingCache {
 
     // L1: Memory cache
     const memoryHit = this.memoryCache.get(key);
-    if (memoryHit && (Date.now() - memoryHit.timestamp < memoryHit.ttlMs)) {
-      console.log("Embedding cache L1 hit", { key: key.substring(0, 20) + '...' });
-      MetricsRecorder.recordCacheHit('L1', key);
+    if (memoryHit && Date.now() - memoryHit.timestamp < memoryHit.ttlMs) {
+      console.log("Embedding cache L1 hit", { key: `${key.substring(0, 20)}...` });
+      MetricsRecorder.recordCacheHit("L1", key);
       return memoryHit.data;
     }
-    
-    if (memoryHit) { // Expired from L1
+
+    if (memoryHit) {
+      // Expired from L1
       this.memoryCache.delete(key);
-      console.log("Embedding cache L1 expired", { key: key.substring(0, 20) + '...' });
+      console.log("Embedding cache L1 expired", { key: `${key.substring(0, 20)}...` });
     }
 
     // L2: Redis cache (if available)
@@ -55,21 +59,24 @@ export class MultiLevelEmbeddingCache {
       try {
         const redisHit = await this.redis.get(key);
         if (redisHit) {
-          console.log("Embedding cache L2 hit", { key: key.substring(0, 20) + '...' });
-          MetricsRecorder.recordCacheHit('L2', key);
+          console.log("Embedding cache L2 hit", { key: key.substring(0, 20) + "..." });
+          MetricsRecorder.recordCacheHit("L2", key);
           const data = JSON.parse(redisHit) as number[];
-          
+
           // Refresh L1 cache with data from L2
           this.updateMemoryCache(key, data, this.config.l1TtlSeconds * 1000);
           return data;
         }
       } catch (error) {
-        console.error("Redis GET error for embedding cache", { key: key.substring(0, 20) + '...', error });
+        console.error("Redis GET error for embedding cache", {
+          key: key.substring(0, 20) + "...",
+          error,
+        });
         // Proceed as if cache miss, do not block embedding generation
       }
     }
-    
-    console.log("Embedding cache miss (L1 & L2)", { key: key.substring(0, 20) + '...' });
+
+    console.log("Embedding cache miss (L1 & L2)", { key: key.substring(0, 20) + "..." });
     MetricsRecorder.recordCacheMiss(key);
     return null;
   }
@@ -86,14 +93,14 @@ export class MultiLevelEmbeddingCache {
     if (this.redis) {
       try {
         await this.redis.setex(key, l2TtlSeconds, JSON.stringify(embeddings));
-        console.log("Embedding stored in L2 cache", { 
-          key: key.substring(0, 20) + '...', 
-          ttlSeconds: l2TtlSeconds 
+        console.log("Embedding stored in L2 cache", {
+          key: key.substring(0, 20) + "...",
+          ttlSeconds: l2TtlSeconds,
         });
       } catch (error) {
-        console.error("Redis SETEX error for embedding cache", { 
-          key: key.substring(0, 20) + '...', 
-          error 
+        console.error("Redis SETEX error for embedding cache", {
+          key: key.substring(0, 20) + "...",
+          error,
         });
         // Failure to write to cache should not fail the main operation
       }
@@ -107,18 +114,18 @@ export class MultiLevelEmbeddingCache {
       const firstKey = this.memoryCache.keys().next().value;
       if (firstKey) {
         this.memoryCache.delete(firstKey);
-        console.log("Embedding cache L1 evicted", { 
-          evictedKey: firstKey.substring(0, 20) + '...', 
-          newKey: key.substring(0, 20) + '...' 
+        console.log("Embedding cache L1 evicted", {
+          evictedKey: firstKey.substring(0, 20) + "...",
+          newKey: key.substring(0, 20) + "...",
         });
-        MetricsRecorder.recordCacheEviction(firstKey, 'LRU_eviction');
+        MetricsRecorder.recordCacheEviction(firstKey, "LRU_eviction");
       }
     }
-    
+
     this.memoryCache.set(key, { data, timestamp: Date.now(), ttlMs });
-    console.log("Embedding stored/updated in L1 cache", { 
-      key: key.substring(0, 20) + '...', 
-      ttlMs 
+    console.log("Embedding stored/updated in L1 cache", {
+      key: key.substring(0, 20) + "...",
+      ttlMs,
     });
   }
 
@@ -126,11 +133,11 @@ export class MultiLevelEmbeddingCache {
   async clear(): Promise<void> {
     // Clear L1 cache
     this.memoryCache.clear();
-    
+
     // Clear L2 cache (embedding keys only)
     if (this.redis) {
       try {
-        const keys = await this.redis.keys('emb:*');
+        const keys = await this.redis.keys("emb:*");
         if (keys.length > 0) {
           await this.redis.del(...keys);
         }
@@ -139,7 +146,7 @@ export class MultiLevelEmbeddingCache {
         console.error("Error clearing L2 cache:", error);
       }
     }
-    
+
     console.log("Embedding cache cleared");
   }
 
@@ -154,7 +161,7 @@ export class MultiLevelEmbeddingCache {
       l1Size: this.memoryCache.size,
       l1MaxSize: this.config.l1CacheSize,
       redisAvailable: this.redis !== null,
-      config: this.config
+      config: this.config,
     };
   }
 
@@ -170,7 +177,7 @@ export class MultiLevelEmbeddingCache {
     if (this.redis) {
       try {
         const pong = await this.redis.ping();
-        l2Healthy = pong === 'PONG';
+        l2Healthy = pong === "PONG";
       } catch (error) {
         console.error("Redis health check failed:", error);
       }
@@ -179,7 +186,7 @@ export class MultiLevelEmbeddingCache {
     return {
       l1: l1Healthy,
       l2: l2Healthy,
-      overall: l1Healthy // Overall health depends on L1, L2 is optional
+      overall: l1Healthy, // Overall health depends on L1, L2 is optional
     };
   }
 }
