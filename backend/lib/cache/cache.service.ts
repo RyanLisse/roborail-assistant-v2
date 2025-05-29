@@ -1,19 +1,26 @@
-// TODO: Fix cache imports - these modules may not be available in current Encore version
-// import { type cache, CacheOpError } from "encore.dev/storage"; // Import CacheOpError for error handling
-// import type { Duration } from "encore.dev/types/units";
 import log from "encore.dev/log";
+import type {
+  ConversationCacheKey,
+  CounterCacheKey,
+  DocumentMetadataCacheKey,
+  GenericStringCacheKey,
+} from "../infrastructure/cache/cache";
 import {
-  AppCacheCluster, // Assuming this is the defined cluster
-  type ConversationCacheKey,
   ConversationKeyspace,
-  type CounterCacheKey,
   CounterKeyspace,
-  type DocumentMetadataCacheKey,
   DocumentMetadataKeyspace,
-  type GenericStringCacheKey,
   GenericStringKeyspace,
 } from "../infrastructure/cache/cache";
-import { StructKeyspace, StringKeyspace, IntKeyspace, EncoreError as CacheMissError, Duration } from "encore.dev";
+
+// Cache error types for compatibility
+class CacheMiss extends Error {
+  static is(error: any): boolean {
+    return error?.message === "Cache miss";
+  }
+}
+
+// Duration type for compatibility
+type Duration = number;
 
 const logger = log.with({ service: "cache-service" });
 
@@ -45,16 +52,16 @@ export class CacheService {
    * @param key The key object for the item.
    * @returns The cached item or null if not found or error.
    */
-  static async getStruct<K, V>(keyspace: StructKeyspace<K, V>, key: K): Promise<V | null> {
+  static async getStruct<K, V>(keyspace: any, key: K): Promise<V | null> {
     try {
       const value = await keyspace.get(key);
-      logger.debug("Cache hit", { keyspace: (keyspace as any).name, key });
+      logger.debug("Cache hit", { key });
       return value;
     } catch (error) {
-      if (error instanceof CacheMissError && (error as any).code === 'MISS') {
-        logger.debug("Cache miss", { keyspace: (keyspace as any).name, key });
+      if (CacheMiss.is(error)) {
+        logger.debug("Cache miss", { key });
       } else {
-        logger.error(error as Error, "Error getting item from cache", { keyspace: (keyspace as any).name, key });
+        logger.error(error as Error, "Error getting item from cache", { key });
       }
       return null;
     }
@@ -68,7 +75,7 @@ export class CacheService {
    * @param ttl Optional TTL for this specific item, overriding keyspace default.
    */
   static async setStruct<K, V>(
-    keyspace: StructKeyspace<K, V>,
+    keyspace: any,
     key: K,
     value: V,
     ttl?: Duration
@@ -79,9 +86,9 @@ export class CacheService {
       } else {
         await keyspace.set(key, value);
       }
-      logger.debug("Item set in cache", { keyspace: (keyspace as any).name, key, ttl: ttl?.toString() });
+      logger.debug("Item set in cache", { key, ttl });
     } catch (error) {
-      logger.error(error as Error, "Error setting item in cache", { keyspace: (keyspace as any).name, key });
+      logger.error(error as Error, "Error setting item in cache", { key });
     }
   }
 
@@ -90,12 +97,12 @@ export class CacheService {
    * @param keyspace The Encore StructKeyspace to use.
    * @param key The key object for the item.
    */
-  static async deleteStruct<K>(keyspace: StructKeyspace<K, any>, key: K): Promise<void> {
+  static async deleteStruct<K>(keyspace: any, key: K): Promise<void> {
     try {
       await keyspace.delete(key);
-      logger.debug("Item deleted from cache", { keyspace: (keyspace as any).name, key });
+      logger.debug("Item deleted from cache", { key });
     } catch (error) {
-      logger.error(error as Error, "Error deleting item from cache", { keyspace: (keyspace as any).name, key });
+      logger.error(error as Error, "Error deleting item from cache", { key });
     }
   }
 
@@ -106,7 +113,7 @@ export class CacheService {
       logger.debug("Cache hit (string)", { key });
       return value;
     } catch (error) {
-      if (error instanceof CacheMissError && (error as any).code === 'MISS') {
+      if (CacheMiss.is(error)) {
         logger.debug("Cache miss (string)", { key });
       } else {
         logger.error(error as Error, "Error getting string from cache", { key });
@@ -122,7 +129,7 @@ export class CacheService {
       } else {
         await GenericStringKeyspace.set(key, value);
       }
-      logger.debug("String set in cache", { key, ttl: ttl?.toString() });
+      logger.debug("String set in cache", { key, ttl });
     } catch (error) {
       logger.error(error as Error, "Error setting string in cache", { key });
     }
@@ -144,7 +151,7 @@ export class CacheService {
       logger.debug("Cache hit (counter)", { key });
       return Number(value);
     } catch (error) {
-      if (error instanceof CacheMissError && (error as any).code === 'MISS') {
+      if (CacheMiss.is(error)) {
         logger.debug("Cache miss (counter)", { key });
       } else {
         logger.error(error as Error, "Error getting counter from cache", { key });
@@ -171,7 +178,7 @@ export class CacheService {
       } else {
         await CounterKeyspace.set(key, BigInt(value));
       }
-      logger.debug("Counter set in cache", { key, value, ttl: ttl?.toString() });
+      logger.debug("Counter set in cache", { key, value, ttl });
     } catch (error) {
       logger.error(error as Error, "Error setting counter in cache", { key, value });
     }
@@ -223,6 +230,3 @@ export class CacheService {
     return this.deleteStruct(DocumentMetadataKeyspace, key);
   }
 }
-
-// Note: This cache service provides a comprehensive interface for Encore's caching capabilities
-// with proper error handling and logging for production use.

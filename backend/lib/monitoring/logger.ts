@@ -138,7 +138,7 @@ export class Logger {
           name: error.name,
           message: error.message,
           stack: error.stack,
-          ...(error.cause && { cause: String(error.cause) }),
+          cause: error.cause ? String(error.cause) : undefined,
         }
       : undefined;
 
@@ -154,7 +154,7 @@ export class Logger {
           name: error.name,
           message: error.message,
           stack: error.stack,
-          ...(error.cause && { cause: String(error.cause) }),
+          cause: error.cause ? String(error.cause) : undefined,
         }
       : undefined;
 

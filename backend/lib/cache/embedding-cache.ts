@@ -56,7 +56,7 @@ export class EmbeddingCache {
   }
 
   async invalidateEmbeddings(texts: string[]): Promise<void> {
-    const inputTypes = ["search_document", "search_query", "classification", "clustering"];
+    const inputTypes: ("search_document" | "search_query" | "classification" | "clustering")[] = ["search_document", "search_query", "classification", "clustering"];
 
     try {
       const invalidationPromises: Promise<void>[] = [];
