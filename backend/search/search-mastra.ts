@@ -95,7 +95,7 @@ function convertMastraChunkToSearchResult(
 
 // Helper function to build filters for Mastra
 function buildMastraFilters(
-  userID: string,
+  _userID: string,
   documentIDs?: string[],
   additionalFilters?: MastraSearchRequest["filters"]
 ): Record<string, any> {

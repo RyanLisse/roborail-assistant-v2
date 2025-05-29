@@ -22,30 +22,30 @@ export interface CounterCacheKey {
 // Placeholder cache implementations (in-memory fallback)
 // TODO: Replace with actual Encore cache when storage module is available
 export const ConversationKeyspace = {
-  get: async (key: ConversationCacheKey) => { throw new Error("Cache miss"); },
-  set: async (key: ConversationCacheKey, value: any) => {},
-  delete: async (key: ConversationCacheKey) => {},
-  with: (options: any) => ConversationKeyspace
+  get: async (_key: ConversationCacheKey) => { throw new Error("Cache miss"); },
+  set: async (_key: ConversationCacheKey, _value: any) => {},
+  delete: async (_key: ConversationCacheKey) => {},
+  with: (_options: any) => ConversationKeyspace
 };
 
 export const DocumentMetadataKeyspace = {
-  get: async (key: DocumentMetadataCacheKey) => { throw new Error("Cache miss"); },
-  set: async (key: DocumentMetadataCacheKey, value: any) => {},
-  delete: async (key: DocumentMetadataCacheKey) => {},
-  with: (options: any) => DocumentMetadataKeyspace
+  get: async (_key: DocumentMetadataCacheKey) => { throw new Error("Cache miss"); },
+  set: async (_key: DocumentMetadataCacheKey, _value: any) => {},
+  delete: async (_key: DocumentMetadataCacheKey) => {},
+  with: (_options: any) => DocumentMetadataKeyspace
 };
 
 export const GenericStringKeyspace = {
-  get: async (key: GenericStringCacheKey) => { throw new Error("Cache miss"); },
-  set: async (key: GenericStringCacheKey, value: any) => {},
-  delete: async (key: GenericStringCacheKey) => {},
-  with: (options: any) => GenericStringKeyspace
+  get: async (_key: GenericStringCacheKey) => { throw new Error("Cache miss"); },
+  set: async (_key: GenericStringCacheKey, _value: any) => {},
+  delete: async (_key: GenericStringCacheKey) => {},
+  with: (_options: any) => GenericStringKeyspace
 };
 
 export const CounterKeyspace = {
-  get: async (key: CounterCacheKey) => { throw new Error("Cache miss"); },
-  set: async (key: CounterCacheKey, value: any) => {},
-  delete: async (key: CounterCacheKey) => {},
-  increment: async (key: CounterCacheKey, delta: bigint) => BigInt(0),
-  with: (options: any) => CounterKeyspace
+  get: async (_key: CounterCacheKey) => { throw new Error("Cache miss"); },
+  set: async (_key: CounterCacheKey, _value: any) => {},
+  delete: async (_key: CounterCacheKey) => {},
+  increment: async (_key: CounterCacheKey, _delta: bigint) => BigInt(0),
+  with: (_options: any) => CounterKeyspace
 };

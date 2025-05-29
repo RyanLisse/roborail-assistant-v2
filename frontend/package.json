@@ -93,7 +93,7 @@
     "react-dropzone": "^14.3.8",
     "react-markdown": "10.1.0",
     "react-resizable-panels": "3.0.2",
-    "redis": "^5.1.0",
+    "redis": "^5.1.1",
     "remark-gfm": "^4.0.1",
     "resumable-stream": "^2.1.0",
     "server-only": "^0.0.1",
@@ -132,5 +132,5 @@
     "@testing-library/react": "^14.1.2",
     "@testing-library/jest-dom": "^6.1.6"
   },
-  "packageManager": "bun@1.2.14"
+  "packageManager": "bun@1.1.38"
 }

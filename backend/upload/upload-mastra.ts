@@ -3,7 +3,7 @@ import { api } from "encore.dev/api";
 import { secret } from "encore.dev/config";
 import log from "encore.dev/log";
 import { nanoid } from "nanoid";
-// Removed zod import - use simple TypeScript interface
+import { z } from "zod";
 import { db } from "../db/connection";
 import { documents } from "../db/schema";
 import { 
